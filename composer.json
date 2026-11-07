@@ -1,5 +1,5 @@
 {
-    "name": "your-vendor/laravel-journey-builder",
+    "name": "hadiabedzadeh/laravel-journey-builder"
     "description": "Reusable drag-and-drop journey orchestration for Laravel with SMS and allowlisted HTTP APIs",
     "type": "library",
     "license": "MIT",
