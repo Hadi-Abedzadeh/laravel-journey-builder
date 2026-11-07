@@ -1,0 +1,49 @@
+{
+    "name": "your-vendor/laravel-journey-builder",
+    "description": "Reusable drag-and-drop journey orchestration for Laravel with SMS and allowlisted HTTP APIs",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "journey",
+        "workflow",
+        "automation",
+        "sql-server",
+        "sms"
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^12.0",
+        "illuminate/database": "^12.0",
+        "illuminate/console": "^12.0",
+        "illuminate/routing": "^12.0",
+        "illuminate/http": "^12.0",
+        "illuminate/validation": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenJourney\\LaravelJourneyBuilder\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenJourney\\LaravelJourneyBuilder\\JourneyBuilderServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "OpenJourney\\LaravelJourneyBuilder\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    }
+}
