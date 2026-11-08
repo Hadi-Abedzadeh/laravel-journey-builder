@@ -43,7 +43,8 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         abort_unless($flow,404);
         // Expose only existence of a secret, never its ciphertext or plaintext.
         $secretNodeIds=$this->db()->table('jb_api_credentials')->where('flow_id',$id)->pluck('node_id')->all();
-        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds'))->header('Cache-Control','no-store, private');
+        $smsProviders=$this->db()->table('jb_sms_providers')->where('is_enabled',1)->whereNull('deleted_at')->orderBy('name')->get(['id','name'])->map(static fn($p)=>['id'=>$p->id,'name'=>$p->name])->all();
+        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders'))->header('Cache-Control','no-store, private');
     }
 
     public function show(Request $request, int $id)
@@ -79,7 +80,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
 
     public function smsIndex(Request $request)
     {
-        $v=$request->validate(['status'=>'nullable|in:sent,failed,unknown,sending','flow'=>'nullable|integer|min:1']);
+        $v=$request->validate(['status'=>'nullable|in:sent,failed,unknown,sending,pending,retry_authorized','flow'=>'nullable|integer|min:1']);
         $db=$this->db();
         $q=$db->table('jb_sms_logs as s')->leftJoin('jb_flows as f','f.id','=','s.flow_id');
         if (!empty($v['status'])) TypedWhere::eq($q, 's.status', $v['status'], 20);
@@ -205,8 +206,22 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             if ($v['status']==='active') {
                 $graph=Definition::validate(json_decode($flow->graph_json,true),true);
                 $types=array_column($graph['nodes'],'type');
-                if (in_array('sms',$types,true) && (!config('journey_builder.sms.enabled') || !config('journey_builder.sms.url'))) {
-                    throw ValidationException::withMessages(['status'=>'گره SMS وجود دارد، اما API پیامک هنوز فعال/تنظیم نشده است.']);
+                foreach ($graph['nodes'] as $node) {
+                    if ($node['type'] !== 'sms') continue;
+                    $smsConfig = $node['config'] ?? [];
+                    if (($smsConfig['delivery_mode'] ?? 'legacy') === 'legacy') {
+                        if (!config('journey_builder.sms.enabled') || !config('journey_builder.sms.url')) {
+                            throw ValidationException::withMessages(['status'=>'ارسال پیامک نسخه قدیمی هنوز فعال/تنظیم نشده است.']);
+                        }
+                        continue;
+                    }
+                    if (!config('journey_builder.sms.managed_enabled', false)) {
+                        throw ValidationException::withMessages(['status'=>'ارسال پنل‌های پیامکی در تنظیمات سرور غیرفعال است.']);
+                    }
+                    $providerQ = $db->table('jb_sms_providers')->where('is_enabled',1)->whereNull('deleted_at');
+                    $selectedId = (int)($smsConfig['provider_id'] ?? 0);
+                    $ok = $selectedId ? $providerQ->where('id',$selectedId)->exists() : $providerQ->where('is_default',1)->exists();
+                    if (!$ok) throw ValidationException::withMessages(['status'=>'برای تمام گره‌های پیامک یک پنل فعال یا پیش‌فرض مشخص کنید.']);
                 }
                 if (in_array('api',$types,true) && !config('journey_builder.api.enabled')) {
                     throw ValidationException::withMessages(['status'=>'ارسال API از تنظیمات سرور غیرفعال است.']);

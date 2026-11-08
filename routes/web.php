@@ -3,10 +3,16 @@
 use OpenJourney\LaravelJourneyBuilder\Http\Controllers\JourneyBuilderController;
 use OpenJourney\LaravelJourneyBuilder\Http\Middleware\DashboardAccess;
 use Illuminate\Support\Facades\Route;
+use OpenJourney\LaravelJourneyBuilder\Http\Controllers\SmsProviderController;
 
 Route::middleware(['web', DashboardAccess::class])->prefix(config('journey_builder.route_prefix', 'journeys'))->name('jb.')->group(function () {
         Route::get('/',[JourneyBuilderController::class,'index'])->name('index');
         Route::get('/sms',[JourneyBuilderController::class,'smsIndex'])->name('sms');
+        Route::get('/sms/providers',[SmsProviderController::class,'index'])->name('sms.providers');
+        Route::post('/sms/providers',[SmsProviderController::class,'store'])->name('sms.providers.store');
+        Route::put('/sms/providers/{id}',[SmsProviderController::class,'update'])->whereNumber('id')->name('sms.providers.update');
+        Route::post('/sms/providers/{id}/default',[SmsProviderController::class,'makeDefault'])->whereNumber('id')->name('sms.providers.default');
+        Route::delete('/sms/providers/{id}',[SmsProviderController::class,'destroy'])->whereNumber('id')->name('sms.providers.destroy');
         Route::post('/flows',[JourneyBuilderController::class,'create'])->name('create');
         Route::get('/flows/{id}/edit',[JourneyBuilderController::class,'builder'])->whereNumber('id')->name('builder');
         Route::get('/flows/{id}/export',[JourneyBuilderController::class,'export'])->whereNumber('id')->name('export');

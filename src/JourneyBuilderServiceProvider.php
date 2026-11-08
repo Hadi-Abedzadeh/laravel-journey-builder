@@ -9,12 +9,18 @@ use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderTick;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderStatus;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderRetry;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderPrune;
+use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderSmsDispatch;
 
 final class JourneyBuilderServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $defaults = require __DIR__ . '/../config/journey_builder.php';
         $this->mergeConfigFrom(__DIR__ . '/../config/journey_builder.php', 'journey_builder');
+        // Shallow Laravel merge would drop new nested sms settings for hosts with an old published config.
+        $this->app['config']->set('journey_builder', array_replace_recursive(
+            $defaults, (array) $this->app['config']->get('journey_builder', [])
+        ));
     }
 
     public function boot(): void
@@ -33,7 +39,7 @@ final class JourneyBuilderServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 JourneyBuilderEnroll::class, JourneyBuilderTick::class,
-                JourneyBuilderStatus::class, JourneyBuilderRetry::class, JourneyBuilderPrune::class,
+                JourneyBuilderStatus::class, JourneyBuilderRetry::class, JourneyBuilderPrune::class, JourneyBuilderSmsDispatch::class,
             ]);
         }
 
@@ -41,6 +47,7 @@ final class JourneyBuilderServiceProvider extends ServiceProvider
         if (config('journey_builder.auto_schedule', false)) {
             Schedule::command('journey-builder:enroll --batch=1000')->everyMinute()->withoutOverlapping();
             Schedule::command('journey-builder:tick --batch=100')->everyMinute()->withoutOverlapping();
+            Schedule::command('journey-builder:sms-dispatch --batch=1000')->everyMinute()->withoutOverlapping();
         }
     }
 }

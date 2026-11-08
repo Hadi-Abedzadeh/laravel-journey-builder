@@ -1,3 +1,7 @@
+## v3.2 managed SMS provider update
+
+See [README_SMS_V3_2_FA.md](README_SMS_V3_2_FA.md) for Kavenegar provider management, encrypted API keys, additive SQL Server migration and chunked delivery command (`journey-builder:sms-dispatch`). Delivery is disabled by default. Older SMS nodes retain their legacy API behavior.
+
 # Laravel Journey Builder — v3.1 preview
 
 General-purpose, drag-and-drop journeys for **Laravel 12 / PHP 8.2+**. Includes SQL Server-aware queries, conditional enrollments, delays, independent journey state, SMS and HTTPS API nodes, dashboard reports, manual retries, and opt-in compact retention for completed users.

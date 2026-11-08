@@ -17,6 +17,10 @@ return [
     'timezone' => env('JOURNEY_BUILDER_TIMEZONE', 'Asia/Tehran'),
     'member_timezone' => env('JOURNEY_BUILDER_MEMBER_TIMEZONE', config('app.timezone', 'UTC')),
     'sms' => [
+        // Explicit operator enable; a new installation MUST NOT silently send live SMS.
+        'managed_enabled' => (bool) env('JOURNEY_BUILDER_MANAGED_SMS_ENABLED', false),
+        // The documented Kavenegar per-request limit is 200.
+        'chunk_size' => (int) env('JOURNEY_BUILDER_SMS_CHUNK_SIZE', 200),
         'url' => env('JOURNEY_BUILDER_SMS_URL', env('JOURNEY_SMS_URL')),
         'token' => env('JOURNEY_BUILDER_SMS_TOKEN', env('JOURNEY_SMS_TOKEN')),
         'enabled' => env('JOURNEY_BUILDER_SMS_ENABLED', false),

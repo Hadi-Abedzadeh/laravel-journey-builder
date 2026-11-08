@@ -216,6 +216,10 @@ final class Engine
                     break;
                 case 'sms':
                     $result=$this->external($run,$flow,$cfg,'sms');
+                    if ($result==='queued') {
+                        $this->write($run,['state'=>'waiting','next_run_at'=>$this->stamp($this->now()->addMinute())]);
+                        return;
+                    }
                     if ($result==='unknown') {
                         $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS outcome unknown; manual reconciliation required']);
                         return;
@@ -256,6 +260,9 @@ final class Engine
 
     private function external(object $run, object $flow, array $cfg, string $type): string
     {
+        if ($type==='sms' && ($cfg['delivery_mode'] ?? 'legacy')==='managed') {
+            return app(ManagedSmsQueue::class)->enqueueOrStatus($run, $flow, $cfg);
+        }
         $db=$this->db();
         $table=$type==='sms'?'jb_sms_logs':'jb_api_logs';
         $existing=TypedWhere::eq($db->table($table)->where('run_id',$run->id), 'node_id', $run->node_id, 80)->first();

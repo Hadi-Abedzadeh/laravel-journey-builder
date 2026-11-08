@@ -32,6 +32,7 @@ final class PackageTest extends TestCase
         $this->assertTrue(Route::has('jb.status'));
         $this->assertFalse(Route::has('jb.login'));
         $this->assertFalse(Route::has('jb.logout'));
+        $this->assertTrue(Route::has('jb.sms.providers'));
     }
 
     public function test_package_migration_is_non_destructive_and_creates_audit(): void
@@ -45,9 +46,16 @@ final class PackageTest extends TestCase
         $retention = require __DIR__.'/../database/migrations/2026_11_08_100000_add_journey_builder_retention_tables.php';
         $retention->up();
         foreach (['jb_run_hashes','jb_flow_totals','jb_node_totals'] as $table) $this->assertTrue(Schema::hasTable($table));
+        $smsMigration = require __DIR__.'/../database/migrations/2026_11_08_180000_add_journey_sms_providers.php';
+        $smsMigration->up();
+        $this->assertTrue(Schema::hasTable('jb_sms_providers'));
+        foreach (['provider_id','sender','receptor','message_text','provider_message_id'] as $column) {
+            $this->assertTrue(Schema::hasColumn('jb_sms_logs',$column));
+        }
         // Re-running the up() method does not alter existing tables or records.
         $migration->up();
         $retention->up();
+        $smsMigration->up();
         $migration->down();
         $retention->down();
         $this->assertTrue(Schema::hasTable('jb_runs'));

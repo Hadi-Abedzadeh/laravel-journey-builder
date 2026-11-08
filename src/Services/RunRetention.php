@@ -58,7 +58,7 @@ final class RunRetention
             // Retain unresolved external outcomes for manual reconciliation, even for legacy exited runs.
             foreach (['jb_sms_logs','jb_api_logs'] as $table) {
                 if (TypedWhere::oneOf($db->table($table)->where('run_id',$runId),
-                    'status',['unknown','sending','retry_authorized'],20)->exists()) return false;
+                    'status',['unknown','sending','retry_authorized','pending'],20)->exists()) return false;
             }
 
             $digest = $this->userDigest((string) $run->user_id);

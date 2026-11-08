@@ -71,9 +71,23 @@ final class Definition
                 if (!in_array($cfg['operator'] ?? '', ['exists','not_exists','equals','not_equals','starts_with','not_starts_with'],true)) self::fail('عملگر ویژگی نامعتبر است.');
             }
             if ($type === 'sms') {
+                $mode = $cfg['delivery_mode'] ?? 'legacy'; // Older stored graphs stay on legacy gateway.
+                if (!in_array($mode, ['managed', 'legacy'], true)) self::fail('روش ارسال پیامک نامعتبر است.');
+                $allowed = ['delivery_mode','template','message','provider_id'];
+                if (array_diff(array_keys($cfg), $allowed)) self::fail('تنظیمات ناشناخته گره پیامک.');
                 self::short($cfg['template'] ?? '', 150, 'sms template');
-                if ($publish && !preg_match('/^[A-Za-z0-9_.-]{1,150}$/D', $cfg['template'] ?? '')) self::fail('کد قالب پیامک معتبر نیست.');
-                self::short($cfg['message'] ?? '', 1000, 'sms message');
+                self::short($cfg['message'] ?? '', 1800, 'sms message');
+                if ($mode === 'managed') {
+                    $id = $cfg['provider_id'] ?? 0;
+                    if ((!is_int($id) && !ctype_digit((string)$id)) || (int)$id < 0) self::fail('پنل انتخاب‌شده برای پیامک معتبر نیست.');
+                    if ($publish && trim((string)($cfg['message'] ?? '')) === '') self::fail('متن پیامک اجباری است.');
+                    $unmatched = preg_replace('/\{\{\s*[A-Za-z][A-Za-z0-9_]{0,49}\s*\}\}/','',(string)($cfg['message']??''));
+                    if (str_contains($unmatched,'{{') || str_contains($unmatched,'}}')) {
+                        self::fail('متغیرهای SMS باید به‌صورت {{firstName}} باشند.');
+                    }
+                } elseif ($publish && !preg_match('/^[A-Za-z0-9_.-]{1,150}$/D', $cfg['template'] ?? '')) {
+                    self::fail('کد قالب پیامک نسخه قدیمی معتبر نیست.');
+                }
             }
             if ($type === 'api') {
                 self::short($cfg['url'] ?? '', 1000, 'API URL');
