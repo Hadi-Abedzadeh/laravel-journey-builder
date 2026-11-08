@@ -5,7 +5,7 @@ const labels={trigger:'ورود کاربران',condition:'شرط رویداد',
 const icons={trigger:'▶',condition:'◇',attribute:'◈',split:'⑂',slot:'◷',delay:'◴',wait_event:'⌛',sms:'✉',api:'↗',exit:'■'};
 const colors={trigger:'#3182ee',condition:'#e0a434',attribute:'#e7a238',split:'#9d6ddd',slot:'#ed9563',delay:'#eb9463',wait_event:'#cf6d75',sms:'#14a985',api:'#3677d6',exit:'#8795a8'};
 const portLabels={next:'بعدی',yes:'بله',no:'خیر',a:'مسیر A',b:'مسیر B',event:'رویداد',timeout:'زمان تمام شد',success:'موفق',failure:'ناموفق'};
-const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{template:'',message:''},api:{url:'',method:'POST',token_source:'none',token_alias:'',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","journey":"{{flowCode}}"}'},exit:{}};
+const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{template:'',message:''},api:{url:'',method:'POST',token_source:'none',token_alias:'',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
 const days=['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
 const opNames={exists:'وجود داشته باشد',not_exists:'وجود نداشته باشد',equals:'برابر باشد',not_equals:'برابر نباشد',starts_with:'با مقدار شروع شود',not_starts_with:'با مقدار شروع نشود'};
 const $=id=>document.getElementById(id);
@@ -44,7 +44,7 @@ if(n.type==='api'){
   +selectField('محل قرارگیری توکن در درخواست','cfg-token_header',c.token_header||'bearer',[['bearer','Authorization: Bearer'],['x-api-key','X-API-Key'],['custom','هدر سفارشی X-...']])
   +'<div id="api-custom-header-settings">'+field('نام هدر سفارشی','cfg-token_custom_header',c.token_custom_header||'X-Access-Token','text','dir="ltr"')+'</div></div>'
   +textField('بدنه JSON (متغیرها قابل استفاده‌اند)','cfg-body',c.body||'{}',8)
-  +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{flowCode}}, {{runId}}, {{nodeId}}. دامنه مقصد باید در JOURNEY_BUILDER_API_ALLOWED_HOSTS مجاز شده باشد. پاسخ 2xx موفق است، نه تایید انجام فرآیند مقصد.</div>';
+  +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}}. دامنه مقصد باید در JOURNEY_BUILDER_API_ALLOWED_HOSTS مجاز شده باشد. پاسخ 2xx موفق است، نه تایید انجام فرآیند مقصد.</div>';
 }
 if(n.type==='exit')html+='<div class="muted-box">هنگام رسیدن کاربر به این مرحله، اجرای او پایان می‌یابد.</div>';
 if(!readonly)html+='<button class="btn danger" id="delete-node" style="width:100%;margin-top:15px">حذف گره</button>';

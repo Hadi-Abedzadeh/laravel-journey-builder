@@ -42,9 +42,14 @@ final class PackageTest extends TestCase
         foreach (['jb_flows','jb_runs','jb_sms_logs','jb_api_logs','jb_step_logs','jb_api_credentials','jb_retry_audit'] as $table) {
             $this->assertTrue(Schema::hasTable($table), $table);
         }
+        $retention = require __DIR__.'/../database/migrations/2026_11_08_100000_add_journey_builder_retention_tables.php';
+        $retention->up();
+        foreach (['jb_run_hashes','jb_flow_totals','jb_node_totals'] as $table) $this->assertTrue(Schema::hasTable($table));
         // Re-running the up() method does not alter existing tables or records.
         $migration->up();
+        $retention->up();
         $migration->down();
+        $retention->down();
         $this->assertTrue(Schema::hasTable('jb_runs'));
     }
 

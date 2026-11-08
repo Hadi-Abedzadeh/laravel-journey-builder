@@ -5,6 +5,7 @@ namespace OpenJourney\LaravelJourneyBuilder\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use OpenJourney\LaravelJourneyBuilder\Services\TypedWhere;
+use OpenJourney\LaravelJourneyBuilder\Services\RetryService;
 
 /** Manual, bounded retries. External deliveries never resent without two explicit opt-ins. */
 final class JourneyBuilderRetry extends Command
@@ -39,45 +40,7 @@ final class JourneyBuilderRetry extends Command
         $runs=$query->limit($limit)->get();
         $stats=['selected'=>$runs->count(),'eligible'=>0,'retried'=>0,'skipped'=>0,'reasons'=>[]];
         foreach ($runs as $candidate) {
-            $process=function () use ($db,$candidate,$external,$commit,&$stats) {
-                $run=$db->table('jb_runs')->where('id',$candidate->id)->lockForUpdate()->first();
-                if (!$run || $run->state!=='failed') return 'not_failed';
-                $flow=$db->table('jb_flows')->where('id',$run->flow_id)->first();
-                if (!$flow || $flow->status!=='active') return 'flow_not_active';
-                if ((int)$flow->revision!==(int)$run->revision) return 'revision_mismatch';
-                $nodes=collect(json_decode($flow->graph_json,true)['nodes']??[])->keyBy('id');
-                $node=$nodes->get($run->node_id);
-                if (!$node) return 'missing_node';
-                $kind=$node['type']; $log=null;
-                if (in_array($kind,['sms','api'],true)) {
-                    $table=$kind==='sms'?'jb_sms_logs':'jb_api_logs';
-                    $log=TypedWhere::eq($db->table($table)->where('run_id',$run->id), 'node_id', $run->node_id,80)->first();
-                    if ($log) {
-                        if ($log->status!=='failed') return 'delivery_'.$log->status.'_blocked';
-                        if (!$external) return 'explicit_external_retry_required';
-                        if ((int)$log->attempts >= (int) config('journey_builder.max_delivery_attempts',3)) return 'attempt_limit';
-                    }
-                }
-                if (!$commit) return 'eligible';
-                $now=now('UTC')->format('Y-m-d H:i:s');
-                $db->table('jb_retry_audit')->insert([
-                    'flow_id'=>$run->flow_id,'run_id'=>$run->id,'node_id'=>$run->node_id,
-                    'retry_kind'=>$log?'external':'run',
-                    'previous_status'=>$log? $log->status:null,
-                    'previous_error'=>$run->last_error,
-                    'created_at'=>$now,
-                ]);
-                if ($log) {
-                    TypedWhere::eq($db->table($kind==='sms'?'jb_sms_logs':'jb_api_logs')->where('id',$log->id), 'status', 'failed', 20)
-                        ->update(['status'=>'retry_authorized','updated_at'=>$now]);
-                }
-                TypedWhere::eq($db->table('jb_runs')->where('id',$run->id), 'state', 'failed',20)->update([
-                    'state'=>'ready','next_run_at'=>$now,'locked_until'=>null,
-                    'last_error'=>null,'updated_at'=>$now,
-                ]);
-                return 'retried';
-            };
-            $result=$db->transaction($process, 3);
+            $result=app(RetryService::class)->retry((int)$candidate->id, $flowId ? (int)$flowId : null, $commit, $external, (bool)$this->option('ack-duplicate-risk'));
             if ($result==='eligible') $stats['eligible']++;
             elseif ($result==='retried') $stats['retried']++;
             else { $stats['skipped']++;$stats['reasons'][$result]=($stats['reasons'][$result]??0)+1; }

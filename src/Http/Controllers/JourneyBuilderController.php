@@ -5,6 +5,7 @@ namespace OpenJourney\LaravelJourneyBuilder\Http\Controllers;
 use OpenJourney\LaravelJourneyBuilder\Services\Definition;
 use OpenJourney\LaravelJourneyBuilder\Services\ApiGateway;
 use OpenJourney\LaravelJourneyBuilder\Services\TypedWhere;
+use OpenJourney\LaravelJourneyBuilder\Services\RetryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,13 +24,16 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
     {
         $db=$this->db();
         $flows=$db->table('jb_flows')->orderByDesc('id')->paginate(30);
-        $runRows=$db->table('jb_runs')->selectRaw('flow_id, state, count(*) as total')->groupBy('flow_id','state')->get();
-        $smsRows=$db->table('jb_sms_logs')->selectRaw('flow_id, status, count(*) as total')->groupBy('flow_id','status')->get();
-        $apiRows=$db->table('jb_api_logs')->selectRaw('flow_id, status, count(*) as total')->groupBy('flow_id','status')->get();
+        $pageIds=$flows->getCollection()->pluck('id')->all();
         $stats=[];
-        foreach ($runRows as $r) $stats[$r->flow_id]['runs'][$r->state]=(int)$r->total;
-        foreach ($smsRows as $r) $stats[$r->flow_id]['sms'][$r->status]=(int)$r->total;
-        foreach ($apiRows as $r) $stats[$r->flow_id]['api'][$r->status]=(int)$r->total;
+        if ($pageIds) {
+            $runRows=$db->table('jb_runs')->whereIn('flow_id',$pageIds)
+                ->selectRaw('flow_id, state, count(*) as total')->groupBy('flow_id','state')->get();
+            foreach ($runRows as $r) $stats[$r->flow_id]['runs'][$r->state]=(int)$r->total;
+            foreach ($db->table('jb_flow_totals')->whereIn('flow_id',$pageIds)->get() as $summary) {
+                $stats[$summary->flow_id]['runs']['exited'] = (int)($stats[$summary->flow_id]['runs']['exited']??0) + (int)$summary->pruned_runs;
+            }
+        }
         return response()->view('journey-builder::index',compact('flows','stats'))->header('Cache-Control','no-store, private');
     }
 
@@ -52,8 +56,19 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $runCounts=$db->table('jb_runs')->where('flow_id',$id)->selectRaw('state,count(*) as total')->groupBy('state')->pluck('total','state')->all();
         $smsCounts=$db->table('jb_sms_logs')->where('flow_id',$id)->selectRaw('status,count(*) as total')->groupBy('status')->pluck('total','status')->all();
         $apiCounts=$db->table('jb_api_logs')->where('flow_id',$id)->selectRaw('status,count(*) as total')->groupBy('status')->pluck('total','status')->all();
+        $archived=$db->table('jb_flow_totals')->where('flow_id',$id)->first();
+        if ($archived) {
+            $runCounts['exited'] = (int)($runCounts['exited']??0) + (int)$archived->pruned_runs;
+            foreach (['sent','failed','unknown'] as $status) {
+                $smsCounts[$status] = (int)($smsCounts[$status]??0) + (int)$archived->{'sms_'.$status};
+                $apiCounts[$status] = (int)($apiCounts[$status]??0) + (int)$archived->{'api_'.$status};
+            }
+        }
         $currentNodes=$db->table('jb_runs')->where('flow_id',$id)->selectRaw('node_id,count(*) as total')->groupBy('node_id')->pluck('total','node_id')->all();
         $arrivals=$db->table('jb_step_logs')->where('flow_id',$id)->selectRaw('to_node_id,count(*) as total')->groupBy('to_node_id')->pluck('total','to_node_id')->all();
+        foreach ($db->table('jb_node_totals')->where('flow_id',$id)->get() as $aggregate) {
+            $arrivals[$aggregate->node_id] = (int)($arrivals[$aggregate->node_id]??0) + (int)$aggregate->arrivals;
+        }
         $logs=$db->table('jb_step_logs')->where('flow_id',$id)->orderByDesc('id')->limit(40)->get();
         $sms=$db->table('jb_sms_logs')->where('flow_id',$id)->orderByDesc('id')->limit(30)->get();
         $api=$db->table('jb_api_logs')->where('flow_id',$id)->orderByDesc('id')->limit(30)->get();
@@ -86,7 +101,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             'graph_json'=>json_encode(Definition::blank(),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
             'created_at'=>now('UTC'),'updated_at'=>now('UTC'),
         ]);
-        return response()->json(['id'=>$id,'code'=>$code,'url'=>route('jb.builder',$id)],201);
+        return response()->json(['id'=>$id,'url'=>route('jb.builder',$id)],201);
     }
 
     public function save(Request $request, int $id): JsonResponse
@@ -97,7 +112,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $db->transaction(function () use ($db,$id,$v,$graph) {
             $flow=$db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
             abort_unless($flow,404);
-            if ($flow->status!=='draft' || $db->table('jb_runs')->where('flow_id',$id)->exists()) {
+            if ($flow->status!=='draft' || $db->table('jb_runs')->where('flow_id',$id)->exists() || $db->table('jb_run_hashes')->where('flow_id',$id)->exists()) {
                 throw ValidationException::withMessages(['graph'=>'برای حفظ اجراها، فقط جرنی Draft بدون سابقه اجرا قابل ویرایش است.']);
             }
             $db->table('jb_flows')->where('id',$id)->update([
@@ -132,7 +147,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $db->transaction(function () use ($db, $id, $nodeId, $input, $clear) {
             $flow = $db->table('jb_flows')->where('id', $id)->lockForUpdate()->first();
             abort_unless($flow, 404);
-            if ($flow->status !== 'draft' || $db->table('jb_runs')->where('flow_id', $id)->exists()) {
+            if ($flow->status !== 'draft' || $db->table('jb_runs')->where('flow_id', $id)->exists() || $db->table('jb_run_hashes')->where('flow_id',$id)->exists()) {
                 throw ValidationException::withMessages(['token'=>'توکن جرنی فعال یا دارای سابقه اجرا قابل تغییر نیست.']);
             }
             $nodes = json_decode($flow->graph_json, true, 512, JSON_THROW_ON_ERROR)['nodes'] ?? [];
@@ -157,6 +172,24 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             ]);
         });
         return response()->json(['ok'=>true,'configured'=>!$clear])->header('Cache-Control','no-store, private');
+    }
+
+    /** Explicit, CSRF-protected manual retry; stays on the failed node. */
+    public function retryRun(Request $request, int $id, int $runId, RetryService $service): JsonResponse
+    {
+        $input = $request->validate([
+            'retry_external' => 'sometimes|boolean',
+            'ack_duplicate_risk' => 'sometimes|boolean',
+        ]);
+        $result = $service->retry(
+            $runId, $id, true,
+            (bool)($input['retry_external'] ?? false),
+            (bool)($input['ack_duplicate_risk'] ?? false),
+        );
+        if ($result !== 'retried') {
+            return response()->json(['ok'=>false,'reason'=>$result],409)->header('Cache-Control','no-store');
+        }
+        return response()->json(['ok'=>true,'status'=>'ready'])->header('Cache-Control','no-store');
     }
 
     public function status(Request $request, int $id): JsonResponse

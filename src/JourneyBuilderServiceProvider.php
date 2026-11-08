@@ -8,6 +8,7 @@ use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderEnroll;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderTick;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderStatus;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderRetry;
+use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderPrune;
 
 final class JourneyBuilderServiceProvider extends ServiceProvider
 {
@@ -32,7 +33,7 @@ final class JourneyBuilderServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 JourneyBuilderEnroll::class, JourneyBuilderTick::class,
-                JourneyBuilderStatus::class, JourneyBuilderRetry::class,
+                JourneyBuilderStatus::class, JourneyBuilderRetry::class, JourneyBuilderPrune::class,
             ]);
         }
 

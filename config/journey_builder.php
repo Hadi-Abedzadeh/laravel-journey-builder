@@ -8,6 +8,11 @@ return [
     'dashboard_access' => env('JOURNEY_BUILDER_DASHBOARD_ACCESS', 'gate'),
     'dashboard_gate' => env('JOURNEY_BUILDER_DASHBOARD_GATE', 'manage-journeys'),
     'auto_schedule' => env('JOURNEY_BUILDER_AUTO_SCHEDULE', false),
+    // Enable only AFTER applying v3.1 migration and configuring a permanent hash key.
+    'retention' => [
+        'purge_on_exit' => (bool) env('JOURNEY_BUILDER_PURGE_ON_EXIT', false),
+        'enrollment_hash_key' => env('JOURNEY_BUILDER_ENROLLMENT_HASH_KEY', ''),
+    ],
     'max_delivery_attempts' => (int) env('JOURNEY_BUILDER_MAX_DELIVERY_ATTEMPTS', 3),
     'timezone' => env('JOURNEY_BUILDER_TIMEZONE', 'Asia/Tehran'),
     'member_timezone' => env('JOURNEY_BUILDER_MEMBER_TIMEZONE', config('app.timezone', 'UTC')),

@@ -27,6 +27,7 @@ final class Engine
     public function enroll(int $batch = 200): array
     {
         $db = $this->db(); $results = [];
+        app(RunRetention::class)->assertReady();
         foreach (TypedWhere::eq($db->table('jb_flows'), 'status', 'active', 20)->get() as $flow) {
             $graph = json_decode($flow->graph_json, true);
             $trigger = collect($graph['nodes'] ?? [])->firstWhere('type', 'trigger');
@@ -54,12 +55,23 @@ final class Engine
             foreach ($rows as $row) {
                 if ($this->compare($row->value, $cfg['operator'], $cfg['value'] ?? '')) {
                     try {
-                        $db->table('jb_runs')->insert([
-                            'flow_id'=>$flow->id, 'user_id'=>$row->userId, 'node_id'=>$trigger['id'],
-                            'state'=>'ready', 'revision'=>$flow->revision,
-                            'next_run_at'=>$this->stamp(), 'created_at'=>$this->stamp(), 'updated_at'=>$this->stamp(),
-                        ]);
-                        $created++;
+                        $enrolled = $db->transaction(function () use ($db, $flow, $row, $trigger) {
+                            $key = app(RunRetention::class)->userDigest((string) $row->userId);
+                            if ($key !== null) {
+                                // Compact permanent deduplication barrier after completed runs are erased.
+                                if (TypedWhere::eq($db->table('jb_run_hashes')->where('flow_id', $flow->id), 'user_digest', $key, 64)->exists()) return false;
+                                $db->table('jb_run_hashes')->insert([
+                                    'flow_id'=>$flow->id, 'user_digest'=>$key, 'created_at'=>$this->stamp(),
+                                ]);
+                            }
+                            $db->table('jb_runs')->insert([
+                                'flow_id'=>$flow->id, 'user_id'=>$row->userId, 'node_id'=>$trigger['id'],
+                                'state'=>'ready', 'revision'=>$flow->revision,
+                                'next_run_at'=>$this->stamp(), 'created_at'=>$this->stamp(), 'updated_at'=>$this->stamp(),
+                            ]);
+                            return true;
+                        });
+                        if ($enrolled) $created++;
                     } catch (QueryException $e) {
                         $details = implode(' ', (array)($e->errorInfo ?? []));
                         if (!preg_match('/\b(2601|2627)\b/', $details)) throw $e;
@@ -162,7 +174,12 @@ final class Engine
             switch ($node['type']) {
                 case 'trigger': break;
                 case 'exit':
-                    $this->write($run,['state'=>'exited','completed_at'=>$this->stamp(),'next_run_at'=>null,'wait_started_at'=>null]);
+                    $db->transaction(function () use ($run) {
+                        $this->write($run,['state'=>'exited','completed_at'=>$this->stamp(),'next_run_at'=>null,'wait_started_at'=>null]);
+                        if (config('journey_builder.retention.purge_on_exit', false)) {
+                            app(RunRetention::class)->pruneExitedRun((int) $run->id);
+                        }
+                    });
                     return;
                 case 'slot':
                     $allowed=$this->nextSlot($cfg);
@@ -203,7 +220,11 @@ final class Engine
                         $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS outcome unknown; manual reconciliation required']);
                         return;
                     }
-                    $next=$result==='sent'?'success':'failure';
+                    if ($result==='failed') {
+                        $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS/API delivery failed; retry from this node is required']);
+                        return;
+                    }
+                    $next='success';
                     break;
                 case 'api':
                     $result=$this->external($run,$flow,$cfg,'api');
@@ -211,7 +232,11 @@ final class Engine
                         $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'API outcome unknown; manual reconciliation required']);
                         return;
                     }
-                    $next=$result==='sent'?'success':'failure';
+                    if ($result==='failed') {
+                        $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS/API delivery failed; retry from this node is required']);
+                        return;
+                    }
+                    $next='success';
                     break;
                 default: throw new \RuntimeException('Unsupported journey node');
             }

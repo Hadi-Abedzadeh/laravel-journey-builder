@@ -35,6 +35,14 @@ final class JourneyBuilderStatus extends Command
                 ->selectRaw('status, COUNT(*) AS total')->groupBy('status')->pluck('total','status')->all();
             $next = TypedWhere::oneOf($db->table('jb_runs')->where('flow_id',$flow->id), 'state',['ready','waiting'],20)->min('next_run_at');
             $due = TypedWhere::oneOf($db->table('jb_runs')->where('flow_id',$flow->id), 'state',['ready','waiting'],20)->where('next_run_at','<=',$now)->count();
+            $archived = $db->table('jb_flow_totals')->where('flow_id',$flow->id)->first();
+            if ($archived) {
+                $runs['exited'] = (int)($runs['exited']??0) + (int)$archived->pruned_runs;
+                foreach (['sent','failed','unknown'] as $status) {
+                    $sms[$status] = (int)($sms[$status]??0) + (int)$archived->{'sms_'.$status};
+                    $api[$status] = (int)($api[$status]??0) + (int)$archived->{'api_'.$status};
+                }
+            }
             $summary[] = [
                 'id'=>(int)$flow->id,'code'=>$flow->code,'title'=>$flow->title,'status'=>$flow->status,
                 'revision'=>(int)$flow->revision,'runs'=>$runs,'sms'=>$sms,'api'=>$api,
@@ -44,8 +52,8 @@ final class JourneyBuilderStatus extends Command
         if ($this->option('json')) {
             $this->line(json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         } else {
-            $this->table(['ID','Code','Title','Status','Ready','Waiting','Failed','Exited','Due','Next due','SMS sent','SMS unknown'],
-                array_map(fn($r)=>[$r['id'],$r['code'],$r['title'],$r['status'],
+            $this->table(['ID','Title','Status','Ready','Waiting','Failed','Exited','Due','Next due','SMS sent','SMS unknown'],
+                array_map(fn($r)=>[$r['id'],$r['title'],$r['status'],
                     $r['runs']['ready']??0,$r['runs']['waiting']??0,$r['runs']['failed']??0,
                     $r['runs']['exited']??0,$r['due'],$r['next_run_at']??'-',
                     $r['sms']['sent']??0,$r['sms']['unknown']??0],$summary));
