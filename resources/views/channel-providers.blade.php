@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ $kind==='email'?'پنل‌های ایمیل':'پنل‌های وب‌پوش' }} | Journey Builder</title>
+<title>{{ $kind==='email'?'پنل‌های ایمیل':'پنل‌های وب‌پوش نوتیفیکیشن' }} | Journey Builder</title>
 <link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}">
 <link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}">
 <style>
@@ -12,9 +12,16 @@
 <body>
 @include('journey-builder::partials.nav',['active'=>$kind])
 <div class="channel-wrap">
-<h1>{{ $kind==='email'?'مدیریت سرویس‌های ارسال ایمیل':'مدیریت وب‌پوش نجوا' }}</h1>
+<h1>{{ $kind==='email'?'مدیریت سرویس‌های ارسال ایمیل':'مدیریت وب‌پوش نوتیفیکیشن' }}</h1>
 <p class="channel-note">{{ $kind==='email'?'SMTP برای ارسال استفاده می‌شود؛ تنظیمات POP3 اختیاری هستند و فقط برای اتصال دریافت ایمیل در آینده ذخیره می‌شوند.':'وب‌پوش برای کاربرانی اجرا می‌شود که توکن عضویت همان سرویس را به بک‌اند داده‌اند. ارسال عمومی به همهٔ اعضا فعال نیست.' }}</p>
 
+@if($needsMigration ?? false)
+<div class="channel-warning">
+    <strong>جدول‌های کانال ایمیل و وب‌پوش هنوز نصب نشده‌اند.</strong>
+    <p>Migration نسخه ایمیل و وب‌پوش را روی اتصال SQL Server اجرا کنید و بعد صفحه را دوباره باز کنید.</p>
+    <code dir="ltr" style="display:block;overflow:auto;text-align:left">php artisan migrate --database=sqlsrv --path=vendor/hadiabedzadeh/laravel-journey-builder/database/migrations/2026_11_09_170000_add_journey_email_and_push.php</code>
+</div>
+@else
 @if(session('message'))<div class="channel-card">{{ session('message') }}</div>
 @endif
 
@@ -30,7 +37,7 @@
 @endif
 @php($kindEmail=$kind==='email')
 <div class="channel-card">
-<h2>افزودن {{ $kindEmail?'حساب SMTP':'سرویس نجوا' }} جدید</h2>
+<h2>افزودن {{ $kindEmail?'حساب SMTP':'سرویس وب‌پوش' }} جدید</h2>
 <form method="post" action="{{ route('jb.channels.store',$kind) }}">
 
 @csrf
@@ -130,6 +137,7 @@ SMTP سرور باید TLS معتبر داشته باشد. برای کارایی
 
 @endif
 </div>
+@endif
 </div>
 @include('journey-builder::partials.footer')
 </body></html>

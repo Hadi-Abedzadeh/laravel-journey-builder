@@ -22,10 +22,16 @@ final class ChannelProviderController extends Controller
     }
     public function index(string $kind)
     {
-        $providers=$this->db()->table($this->table($kind))->whereNull('deleted_at')
-            ->orderByDesc('is_default')->orderBy('id')->get();
-        return response()->view('journey-builder::channel-providers',compact('kind','providers'))
-            ->header('Cache-Control','no-store, private');
+        $table = $this->table($kind);
+        $connection = config('journey_builder.connection', 'sqlsrv');
+        $needsMigration = !\Illuminate\Support\Facades\Schema::connection($connection)->hasTable($table);
+        $providers = $needsMigration
+            ? collect()
+            : $this->db()->table($table)->whereNull('deleted_at')
+                ->orderByDesc('is_default')->orderBy('id')->get();
+
+        return response()->view('journey-builder::channel-providers', compact('kind', 'providers', 'needsMigration'),
+            $needsMigration ? 503 : 200)->header('Cache-Control', 'no-store, private');
     }
     private function validateInput(Request $request,string $kind,bool $create): array
     {

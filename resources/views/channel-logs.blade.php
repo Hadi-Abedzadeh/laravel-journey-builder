@@ -26,5 +26,5 @@
 @endforeach
 @endif
 </tbody></table><div style="padding:15px">{{ $rows->links() }}</div></div>
-<p class="muted">وضعیت sent یعنی پذیرش توسط SMTP یا Najva، نه الزاماً تحویل به Inbox یا نمایش اعلان روی دستگاه. وضعیت unknown نیاز به بررسی دارد.</p>
+<p class="muted">وضعیت sent یعنی پذیرش توسط SMTP یا سرویس وب‌پوش، نه الزاماً تحویل به Inbox یا نمایش اعلان روی دستگاه. وضعیت unknown نیاز به بررسی دارد.</p>
 </div>@include('journey-builder::partials.footer')</body></html>
