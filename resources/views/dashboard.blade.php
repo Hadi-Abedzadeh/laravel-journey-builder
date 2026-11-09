@@ -1,4 +1,6 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>ویرایش جرنی | {{ $flow->title }}</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}"></head><body>
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>ویرایش جرنی | {{ $flow->title }}</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}">
+<link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}?v=3.4.1">
+</head><body>
 @include('journey-builder::partials.nav', ['active' => 'journeys'])
 <div class="editor-layout"><aside class="side"><h3>جعبه ابزار · Drag & Drop</h3><p class="help">یک ابزار را روی بوم بکشید یا روی نام آن کلیک کنید. برای اتصال خروجی را انتخاب و سپس ورودی مقصد را بزنید. بوم را با کشیدن فضای خالی یا اسکرول افقی و عمودی جابه‌جا کنید.</p>
 <div class="palette"><div class="palette-label">ورود و شرط‌ها</div>

@@ -1,4 +1,6 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>مدیریت جرنی‌ها</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}"></head><body>
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>مدیریت جرنی‌ها</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}">
+<link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}?v=3.4.1">
+</head><body>
 @include('journey-builder::partials.nav', ['active' => 'journeys'])
 <main class="wrap"><div class="heading"><div><h1>مدیریت جرنی‌ها</h1><div class="subtle">جرنی‌ها مستقل هستند؛ فعال/غیرفعال کردن یک جرنی، اجرای جرنی‌های دیگر را تغییر نمی‌دهد.</div></div><div class="pill">تعداد جرنی‌ها: {{ number_format($flows->total()) }}</div></div>
 <div class="card"><h2 class="section-title">ساخت جرنی جدید</h2><div class="row"><input id="new-title" style="flex:1;min-width:250px" maxlength="200" placeholder="عنوان فارسی یا دلخواه جرنی"><button id="new-btn" class="btn primary">+ ایجاد و ورود به ویرایش</button></div><p class="subtle">فقط نام نمایشی جرنی را وارد کنید. شناسه‌های سیستمی در سرور ساخته و نگهداری می‌شوند.</p></div>

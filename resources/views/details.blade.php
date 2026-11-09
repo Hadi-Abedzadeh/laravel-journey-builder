@@ -1,4 +1,6 @@
-<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>جزئیات جرنی | {{ $flow->title }}</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}"></head><body>
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>جزئیات جرنی | {{ $flow->title }}</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}">
+<link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}?v=3.4.1">
+</head><body>
 @include('journey-builder::partials.nav', ['active' => 'journeys'])
 <main class="wrap"><div class="heading"><div><a href="{{ route('jb.index') }}">بازگشت به فهرست</a><h1 style="margin-top:12px">{{ $flow->title }}</h1><div class="row"><span class="badge {{ $flow->status }}">{{ ['active'=>'فعال','paused'=>'غیرفعال','draft'=>'پیش‌نویس'][$flow->status]??$flow->status }}</span><span class="subtle">آخرین بروزرسانی: {{ $flow->updated_at }}</span></div></div><a class="btn primary" href="{{ route('jb.builder',$flow->id) }}">ویرایش مراحل · Drag & Drop</a></div>
 @php($total=array_sum($runCounts))

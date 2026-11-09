@@ -2,7 +2,9 @@
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>پنل‌های پیامک | Journey Builder</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}">
 <style>
 body{background:#f5f7fb} .sms-settings{max-width:1220px;margin:32px auto;padding:0 18px} .sms-card{background:white;border:1px solid #dce4f0;border-radius:14px;padding:20px;margin:18px 0}.sms-card h2{margin:0 0 15px}.sms-grid{display:grid;grid-template-columns:repeat(3,minmax(190px,1fr));gap:14px}.sms-field{display:flex;flex-direction:column;gap:7px;font-size:13px}.sms-field input{padding:11px;box-sizing:border-box;border:1px solid #b8c7db;border-radius:8px;width:100%;font:inherit}.sms-hint{font-size:12px;line-height:2;color:#596b85}.sms-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.sms-btn{border:0;border-radius:8px;background:#2563eb;color:#fff;padding:10px 16px;cursor:pointer;font:inherit}.sms-btn.secondary{background:#e6ecf5;color:#29466c}.sms-btn.danger{background:#a72645}.sms-btn:disabled{opacity:.5}.sms-check{display:flex;align-items:center;gap:8px}.sms-check input{width:auto}.sms-msg{padding:12px 16px;background:#eaf6ed;border-radius:9px;color:#146235}.sms-link{color:#2563eb;text-decoration:none}.sms-badge{background:#edf3ff;padding:5px 10px;border-radius:30px}.sms-badge.good{background:#e6f6ec;color:#116e39}.sms-caution{padding:12px;background:#fff5e0;border:1px solid #ffdf9b;border-radius:9px;color:#725009}@media(max-width:790px){.sms-grid{grid-template-columns:1fr}}
-</style></head><body>
+</style>
+<link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}?v=3.4.1">
+</head><body>
 @include('journey-builder::partials.nav', ['active' => 'providers'])
 <div class="sms-settings"><h1>مدیریت پنل‌های ارسال پیامک</h1>
 <p class="sms-hint">پنل‌های مختلف رو اضافه، ویرایش، غیرفعال یا حذف کن. هر جرنی می‌تونه پنل اختصاصی انتخاب کنه یا از پنل پیش‌فرض این صفحه استفاده کنه. در نسخه فعلی درایور کاوه‌نگار فعال است.</p>
