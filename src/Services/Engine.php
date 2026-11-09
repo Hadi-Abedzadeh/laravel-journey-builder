@@ -202,6 +202,23 @@ final class Engine
                         return;
                     }
                     break;
+                case 'email':
+                case 'webpush':
+                    $result=app(ChannelQueue::class)->enqueueOrStatus($run,$flow,$cfg,$node['type']);
+                    if ($result==='queued') {
+                        $this->write($run,['state'=>'waiting','next_run_at'=>$this->stamp($this->now()->addMinute())]);
+                        return;
+                    }
+                    if ($result==='unknown') {
+                        $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'Channel outcome unknown; reconcile before retry']);
+                        return;
+                    }
+                    if ($result==='failed') {
+                        $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'Email/push delivery failed; explicit retry required']);
+                        return;
+                    }
+                    $next='success';
+                    break;
                 case 'sms':
                     $result=$this->external($run,$flow,$cfg,'sms');
                     if ($result==='queued') {

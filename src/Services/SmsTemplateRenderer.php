@@ -15,7 +15,7 @@ final class SmsTemplateRenderer
         if (!preg_match('/^[A-Za-z][A-Za-z0-9_]{0,49}$/D', $attribute) || strlen($sign) > 30) {
             throw new RuntimeException('Invalid receptor settings on journey SMS node.');
         }
-        $value = $this->attribute($userId, $attribute, $sign);
+        $value = $this->attributeValue($userId, $attribute, $sign);
         $value = strtr(trim((string) $value), ['۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9','٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
         // Canonical domestic mobile number for reliable response matching.
         if (preg_match('/^\+989(\d{9})$/D', $value, $m) || preg_match('/^00989(\d{9})$/D', $value, $m)) {
@@ -26,7 +26,7 @@ final class SmsTemplateRenderer
         return $value;
     }
 
-    public function render(string $userId, string $message): string
+    public function render(string $userId, string $message, int $maxLength = 1800, bool $escapeHtml = false): string
     {
         $keys = [];
         if (preg_match_all('/\{\{\s*([A-Za-z][A-Za-z0-9_]{0,49})\s*\}\}/', $message, $matches)) {
@@ -50,17 +50,17 @@ final class SmsTemplateRenderer
         foreach ($keys as $key) {
             $value = $key === 'userId' ? $userId : ($attributes[$key] ?? null);
             if ($value === null || $value === '') throw new RuntimeException('SMS placeholder has no value: '.$key);
-            $values[$key] = (string) $value;
+            $values[$key] = $escapeHtml ? htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : (string)$value;
         }
         $rendered = preg_replace_callback('/\{\{\s*([A-Za-z][A-Za-z0-9_]{0,49})\s*\}\}/',
             static fn (array $match) => $values[$match[1]] ?? '', $message);
         if (str_contains($rendered, '{{') || str_contains($rendered, '}}')) throw new RuntimeException('Unknown or malformed SMS placeholder.');
         $rendered = trim($rendered);
-        if ($rendered === '' || mb_strlen($rendered) > 1800) throw new RuntimeException('SMS message must be between 1 and 1800 characters.');
+        if ($rendered === '' || mb_strlen($rendered) > $maxLength) throw new RuntimeException('Message content is empty or exceeds configured length.');
         return $rendered;
     }
 
-    private function attribute(string $userId, string $key, string $sign = ''): ?string
+    public function attributeValue(string $userId, string $key, string $sign = ''): ?string
     {
         $q = TypedWhere::eq(TypedWhere::eq(
             DB::connection(config('journey_builder.connection', 'sqlsrv'))->table(config('journey_builder.source_table','member_data')),

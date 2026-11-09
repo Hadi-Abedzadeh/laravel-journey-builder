@@ -4,11 +4,19 @@ use OpenJourney\LaravelJourneyBuilder\Http\Controllers\JourneyBuilderController;
 use OpenJourney\LaravelJourneyBuilder\Http\Middleware\DashboardAccess;
 use Illuminate\Support\Facades\Route;
 use OpenJourney\LaravelJourneyBuilder\Http\Controllers\SmsProviderController;
+use OpenJourney\LaravelJourneyBuilder\Http\Controllers\ChannelProviderController;
+use OpenJourney\LaravelJourneyBuilder\Http\Controllers\ChannelLogsController;
 
 Route::middleware(['web', DashboardAccess::class])->prefix(config('journey_builder.route_prefix', 'journeys'))->name('jb.')->group(function () {
         Route::get('/',[JourneyBuilderController::class,'index'])->name('index');
         Route::get('/sms',[JourneyBuilderController::class,'smsIndex'])->name('sms');
         Route::get('/monitoring',[JourneyBuilderController::class,'monitoring'])->name('monitoring');
+        Route::get('/channels/logs',[ChannelLogsController::class,'index'])->name('channels.logs');
+        Route::get('/channels/{kind}/providers',[ChannelProviderController::class,'index'])->where('kind','email|webpush')->name('channels.index');
+        Route::post('/channels/{kind}/providers',[ChannelProviderController::class,'store'])->where('kind','email|webpush')->name('channels.store');
+        Route::put('/channels/{kind}/providers/{id}',[ChannelProviderController::class,'update'])->where('kind','email|webpush')->whereNumber('id')->name('channels.update');
+        Route::post('/channels/{kind}/providers/{id}/default',[ChannelProviderController::class,'makeDefault'])->where('kind','email|webpush')->whereNumber('id')->name('channels.default');
+        Route::delete('/channels/{kind}/providers/{id}',[ChannelProviderController::class,'destroy'])->where('kind','email|webpush')->whereNumber('id')->name('channels.destroy');
         Route::get('/sms/providers',[SmsProviderController::class,'index'])->name('sms.providers');
         Route::post('/sms/providers',[SmsProviderController::class,'store'])->name('sms.providers.store');
         Route::put('/sms/providers/{id}',[SmsProviderController::class,'update'])->whereNumber('id')->name('sms.providers.update');

@@ -1,6 +1,6 @@
 {
     "name": "hadiabedzadeh/laravel-journey-builder",
-    "description": "Reusable drag-and-drop journey orchestration for Laravel with SMS and configurable HTTPS APIs",
+    "description": "Reusable Laravel journey orchestration with SMS, rate-limited SMTP email, Najva webpush, and HTTPS APIs",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -9,16 +9,24 @@
         "workflow",
         "automation",
         "sql-server",
-        "sms"
+        "sms",
+        "email",
+        "smtp",
+        "webpush",
+        "najva"
     ],
     "require": {
         "php": "^8.2",
+        "ext-mbstring": "*",
         "illuminate/support": "^12.0",
         "illuminate/database": "^12.0",
         "illuminate/console": "^12.0",
         "illuminate/routing": "^12.0",
         "illuminate/http": "^12.0",
-        "illuminate/validation": "^12.0"
+        "illuminate/validation": "^12.0",
+        "symfony/mailer": "^7.3",
+        "symfony/mime": "^7.3",
+        "guzzlehttp/guzzle": "^7.8"
     },
     "autoload": {
         "psr-4": {

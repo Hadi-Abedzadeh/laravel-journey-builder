@@ -56,7 +56,7 @@ final class RunRetention
             if (!$flow) throw new RuntimeException('Cannot prune a run whose flow no longer exists.');
 
             // Retain unresolved external outcomes for manual reconciliation, even for legacy exited runs.
-            foreach (['jb_sms_logs','jb_api_logs'] as $table) {
+            foreach (['jb_sms_logs','jb_api_logs','jb_channel_dispatches'] as $table) {
                 if (TypedWhere::oneOf($db->table($table)->where('run_id',$runId),
                     'status',['unknown','sending','retry_authorized','pending'],20)->exists()) return false;
             }
@@ -73,6 +73,10 @@ final class RunRetention
                 ->selectRaw('status, COUNT(*) AS total')->groupBy('status')->pluck('total','status');
             $api = $db->table('jb_api_logs')->where('run_id', $runId)
                 ->selectRaw('status, COUNT(*) AS total')->groupBy('status')->pluck('total','status');
+            $channels=$db->table('jb_channel_dispatches')->where('run_id',$runId)
+                ->selectRaw('channel,status,COUNT(*) AS total')->groupBy('channel','status')->get();
+            $channelCounts=[];
+            foreach ($channels as $row) $channelCounts[$row->channel][$row->status]=(int)$row->total;
             $nodes = $db->table('jb_step_logs')->where('run_id', $runId)
                 ->selectRaw('to_node_id, COUNT(*) AS total')->groupBy('to_node_id')->get();
             $increments = [
@@ -83,6 +87,12 @@ final class RunRetention
                 'api_sent'=>(int)($api['sent']??0),
                 'api_failed'=>(int)($api['failed']??0),
                 'api_unknown'=>(int)($api['unknown']??0),
+                'email_sent'=>(int)($channelCounts['email']['sent']??0),
+                'email_failed'=>(int)($channelCounts['email']['failed']??0),
+                'email_unknown'=>(int)($channelCounts['email']['unknown']??0),
+                'webpush_sent'=>(int)($channelCounts['webpush']['sent']??0),
+                'webpush_failed'=>(int)($channelCounts['webpush']['failed']??0),
+                'webpush_unknown'=>(int)($channelCounts['webpush']['unknown']??0),
             ];
             $now = now('UTC');
             if ($db->table('jb_flow_totals')->where('flow_id', $run->flow_id)->exists()) {
@@ -102,7 +112,7 @@ final class RunRetention
                 }
             }
             // Individual data is deleted within the same transaction as metric aggregation.
-            foreach (['jb_step_logs','jb_sms_logs','jb_api_logs','jb_retry_audit'] as $table) {
+            foreach (['jb_step_logs','jb_sms_logs','jb_api_logs','jb_retry_audit','jb_channel_dispatches'] as $table) {
                 $db->table($table)->where('run_id', $runId)->delete();
             }
             $db->table('jb_runs')->where('id', $runId)->delete();

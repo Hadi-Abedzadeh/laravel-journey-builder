@@ -10,7 +10,8 @@ final class Definition
         'trigger' => ['next'], 'slot' => ['next'], 'delay' => ['next'],
         'condition' => ['yes', 'no'], 'attribute' => ['yes', 'no'],
         'wait_event' => ['event', 'timeout'], 'split' => ['a', 'b'],
-        'sms' => ['success', 'failure'], 'api' => ['success', 'failure'], 'exit' => [],
+        'sms' => ['success', 'failure'], 'api' => ['success', 'failure'],
+        'email' => ['success', 'failure'], 'webpush' => ['success', 'failure'], 'exit' => [],
     ];
 
     public static function blank(): array
@@ -91,6 +92,38 @@ final class Definition
                     }
                 } elseif ($publish && !preg_match('/^[A-Za-z0-9_.-]{1,150}$/D', $cfg['template'] ?? '')) {
                     self::fail('کد قالب پیامک نسخه قدیمی معتبر نیست.');
+                }
+            }
+            if (in_array($type, ['email','webpush'], true)) {
+                $allowed=$type==='email'
+                    ? ['provider_id','recipient_attribute','recipient_sign','subject','body','format']
+                    : ['provider_id','title','body','url','ttl','button_title','button_url'];
+                if (array_diff(array_keys($cfg),$allowed)) self::fail('تنظیمات ناشناخته گره ایمیل یا پوش.');
+                $id=$cfg['provider_id']??0;
+                if ((!is_int($id) && !ctype_digit((string)$id)) || (int)$id<0) self::fail('شناسه پنل نامعتبر است.');
+                if ($type==='email') {
+                    self::short($cfg['recipient_attribute']??'email',50,'email attribute');
+                    self::short($cfg['recipient_sign']??'',30,'email sign');
+                    self::short($cfg['subject']??'',200,'email subject');
+                    self::short($cfg['body']??'',20000,'email body');
+                    if (!in_array($cfg['format']??'text',['text','html'],true)) self::fail('فرمت ایمیل معتبر نیست.');
+                    if ($publish && (!trim((string)($cfg['subject']??'')) || !trim((string)($cfg['body']??'')))) self::fail('موضوع و متن ایمیل اجباری است.');
+                    if (!preg_match('/^[A-Za-z][A-Za-z0-9_]{0,49}$/D', $cfg['recipient_attribute']??'email')) self::fail('Attribute ایمیل معتبر نیست.');
+                } else {
+                    self::short($cfg['title']??'',50,'push title');
+                    self::short($cfg['body']??'',150,'push body');
+                    self::short($cfg['url']??'',250,'push URL');
+                    self::short($cfg['button_title']??'',20,'push button');
+                    self::short($cfg['button_url']??'',80,'push button URL');
+                    if (!is_numeric($cfg['ttl']??24) || (int)($cfg['ttl']??24)<1 || (int)($cfg['ttl']??24)>168) self::fail('TTL پوش باید ۱ تا ۱۶۸ ساعت باشد.');
+                    if (!empty($cfg['url']) && !preg_match('~^https://[A-Za-z0-9.-]+(?:/[\w\-./?%=&+#]*)?$~D',$cfg['url'])) self::fail('آدرس مقصد پوش باید HTTPS عمومی باشد.');
+                    if (!empty($cfg['button_url']) && !preg_match('~^https://[A-Za-z0-9.-]+(?:/[\w\-./?%=&+#]*)?$~D',$cfg['button_url'])) self::fail('آدرس دکمه باید HTTPS باشد.');
+                    if (!empty($cfg['button_title']) !== !empty($cfg['button_url'])) self::fail('متن و لینک دکمه باید با هم تعریف شوند.');
+                    if ($publish && (!trim((string)($cfg['title']??'')) || !trim((string)($cfg['body']??'')))) self::fail('عنوان و متن پوش اجباری است.');
+                }
+                foreach (($type==='email'?['subject','body']:['title','body']) as $field) {
+                    $unmatched=preg_replace('/\{\{\s*[A-Za-z][A-Za-z0-9_]{0,49}\s*\}\}/','',(string)($cfg[$field]??''));
+                    if (str_contains($unmatched,'{{') || str_contains($unmatched,'}}')) self::fail('متغیر ناشناخته در متن.');
                 }
             }
             if ($type === 'api') {

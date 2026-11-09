@@ -31,6 +31,11 @@ return [
         'include_phone' => env('JOURNEY_BUILDER_SMS_INCLUDE_PHONE', false),
         'timeout' => 15,
     ],
+    'channels' => [
+        // Must be explicitly enabled after configuring and testing accounts.
+        'email' => ['enabled'=>(bool)env('JOURNEY_BUILDER_EMAIL_ENABLED',false)],
+        'webpush' => ['enabled'=>(bool)env('JOURNEY_BUILDER_WEBPUSH_ENABLED',false)],
+    ],
     'api' => [
         'enabled' => env('JOURNEY_BUILDER_API_ENABLED', false),
         'timeout' => 15,

@@ -55,9 +55,13 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         abort_unless($flow,404);
         // Expose only existence of a secret, never its ciphertext or plaintext.
         $secretNodeIds=$this->db()->table('jb_api_credentials')->where('flow_id',$id)->pluck('node_id')->all();
+        $emailProviders=\Illuminate\Support\Facades\Schema::connection(config('journey_builder.connection','sqlsrv'))->hasTable('jb_email_providers')
+            ? $this->db()->table('jb_email_providers')->where('is_enabled',1)->whereNull('deleted_at')->get(['id','name'])->map(fn($p)=>['id'=>$p->id,'name'=>$p->name])->all() : [];
+        $pushProviders=\Illuminate\Support\Facades\Schema::connection(config('journey_builder.connection','sqlsrv'))->hasTable('jb_push_providers')
+            ? $this->db()->table('jb_push_providers')->where('is_enabled',1)->whereNull('deleted_at')->get(['id','name'])->map(fn($p)=>['id'=>$p->id,'name'=>$p->name])->all() : [];
         $smsProviders=$this->db()->table('jb_sms_providers')->where('is_enabled',1)->whereNull('deleted_at')->orderBy('name')->get(['id','name'])->map(static fn($p)=>['id'=>$p->id,'name'=>$p->name])->all();
         $canEdit = $this->isEditableFlow($this->db(), $flow);
-        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders','canEdit'))->header('Cache-Control','no-store, private');
+        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders','emailProviders','pushProviders','canEdit'))->header('Cache-Control','no-store, private');
     }
 
     public function show(Request $request, int $id)
@@ -105,7 +109,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
     public function monitoring(Request $request)
     {
         $filters=$request->validate([
-            'command'=>'nullable|in:enroll,tick,sms-dispatch',
+            'command'=>'nullable|in:enroll,tick,sms-dispatch,email-dispatch,webpush-dispatch',
             'status'=>'nullable|in:running,success,partial,failed',
             'flow'=>'nullable|integer|min:1',
         ]);
@@ -120,7 +124,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         if (!empty($filters['status'])) TypedWhere::eq($q,'status',$filters['status'],16);
         $commandRows=$q->orderByDesc('id')->paginate(30)->withQueryString();
         $last=[];
-        foreach (['enroll','tick','sms-dispatch'] as $command) {
+        foreach (['enroll','tick','sms-dispatch','email-dispatch','webpush-dispatch'] as $command) {
             $last[$command]=$db->table('jb_command_runs')->where('command_name',$command)->orderByDesc('id')->first();
         }
         $due=TypedWhere::oneOf(TypedWhere::eq($db->table('jb_runs as r')
@@ -364,6 +368,19 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
                     $selectedId = (int)($smsConfig['provider_id'] ?? 0);
                     $ok = $selectedId ? $providerQ->where('id',$selectedId)->exists() : $providerQ->where('is_default',1)->exists();
                     if (!$ok) throw ValidationException::withMessages(['status'=>'برای تمام گره‌های پیامک یک پنل فعال یا پیش‌فرض مشخص کنید.']);
+                }
+                foreach ($graph['nodes'] as $node) {
+                    $kind=$node['type'];
+                    if (!in_array($kind,['email','webpush'],true)) continue;
+                    if (!config('journey_builder.channels.'.$kind.'.enabled',false))
+                        throw ValidationException::withMessages(['status'=>'ارسال ایمیل/پوش در تنظیمات سرور غیرفعال است.']);
+                    if (!Schema::connection(config('journey_builder.connection','sqlsrv'))->hasTable('jb_channel_dispatches'))
+                        throw ValidationException::withMessages(['status'=>'ابتدا Migration سرویس‌های ایمیل و پوش را اجرا کنید.']);
+                    $table=$kind==='email'?'jb_email_providers':'jb_push_providers';
+                    $q=$db->table($table)->where('is_enabled',1)->whereNull('deleted_at');
+                    $chosen=(int)($node['config']['provider_id']??0);
+                    if (!($chosen?$q->where('id',$chosen)->exists():$q->where('is_default',1)->exists()))
+                        throw ValidationException::withMessages(['status'=>'برای گره ایمیل/پوش پنل فعال یا پیش‌فرض تنظیم کنید.']);
                 }
                 if (in_array('api',$types,true) && !config('journey_builder.api.enabled')) {
                     throw ValidationException::withMessages(['status'=>'ارسال API از تنظیمات سرور غیرفعال است.']);

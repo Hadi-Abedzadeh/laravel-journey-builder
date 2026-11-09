@@ -23,10 +23,10 @@ final class RetryService
             $node=collect($graph['nodes']??[])->firstWhere('id', $run->node_id);
             if (!$node) return 'missing_node';
             $kind=$node['type']; $log=null;
-            if (in_array($kind,['sms','api'],true)) {
+            if (in_array($kind,['sms','api','email','webpush'],true)) {
                 // Even if a crash predated logging, an external action needs explicit approval.
                 if (!$retryExternal || !$ackDuplicateRisk) return 'explicit_external_retry_and_ack_required';
-                $table=$kind==='sms'?'jb_sms_logs':'jb_api_logs';
+                $table=match($kind){'sms'=>'jb_sms_logs','api'=>'jb_api_logs',default=>'jb_channel_dispatches'};
                 $log=TypedWhere::eq($db->table($table)->where('run_id',$run->id),'node_id',$run->node_id,80)->first();
                 if ($log) {
                     if ($log->status !== 'failed') return 'delivery_'.$log->status.'_blocked';
@@ -37,11 +37,11 @@ final class RetryService
             $now=now('UTC');
             $db->table('jb_retry_audit')->insert([
                 'flow_id'=>$run->flow_id, 'run_id'=>$run->id,'node_id'=>$run->node_id,
-                'retry_kind'=>in_array($kind,['sms','api'],true)?'external':'run',
+                'retry_kind'=>in_array($kind,['sms','api','email','webpush'],true)?'external':'run',
                 'previous_status'=>$log?->status, 'previous_error'=>$run->last_error, 'created_at'=>$now,
             ]);
             if ($log) {
-                TypedWhere::eq($db->table($kind==='sms'?'jb_sms_logs':'jb_api_logs')->where('id',$log->id),'status','failed',20)
+                TypedWhere::eq($db->table(match($kind){'sms'=>'jb_sms_logs','api'=>'jb_api_logs',default=>'jb_channel_dispatches'})->where('id',$log->id),'status','failed',20)
                     ->update(['status'=>'retry_authorized','updated_at'=>$now]);
             }
             // Leave node_id and wait_started_at untouched: the user resumes at the same step.
