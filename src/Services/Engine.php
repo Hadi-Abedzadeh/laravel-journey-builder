@@ -29,6 +29,8 @@ final class Engine
         $db = $this->db(); $results = [];
         app(RunRetention::class)->assertReady();
         foreach (TypedWhere::eq($db->table('jb_flows'), 'status', 'active', 20)->get() as $flow) {
+            // A manual-only flow never scans the entire member source.
+            if (($flow->enrollment_mode ?? 'automatic') === 'manual') continue;
             $graph = json_decode($flow->graph_json, true);
             $trigger = collect($graph['nodes'] ?? [])->firstWhere('type', 'trigger');
             if (!$trigger) continue;
@@ -53,7 +55,7 @@ final class Engine
             $rows = $query->orderBy('updated_at')->orderBy('id')->limit(min(1000,max(1,$batch)))->get();
             $created = 0;
             foreach ($rows as $row) {
-                if ($this->compare($row->value, $cfg['operator'], $cfg['value'] ?? '')) {
+                if (TriggerMatcher::matches($row->value, $cfg['operator'], (string)($cfg['value'] ?? ''))) {
                     try {
                         $enrolled = $db->transaction(function () use ($db, $flow, $row, $trigger) {
                             $key = app(RunRetention::class)->userDigest((string) $row->userId);
@@ -87,20 +89,6 @@ final class Engine
         return $results;
     }
 
-    private function compare(mixed $actual, string $op, string $expected): bool
-    {
-        $value = $actual === null ? null : (string)$actual;
-        return match ($op) {
-            'exists' => $value !== null && $value !== '',
-            'not_exists' => $value === null || $value === '',
-            'equals' => $value !== null && $value === $expected,
-            'not_equals' => $value !== null && $value !== $expected,
-            'starts_with' => $value !== null && str_starts_with($value, $expected),
-            'not_starts_with' => $value !== null && !str_starts_with($value, $expected),
-            default => false,
-        };
-    }
-
     private function eventSeen(string $userId, array $cfg, ?string $sinceUtc = null): bool
     {
         $query = TypedWhere::eq(
@@ -118,7 +106,7 @@ final class Engine
             'section', 'attributes', 20)->where('key', $cfg['key']);
         if (!empty($cfg['sign'])) TypedWhere::eq($query, 'sign', $cfg['sign'], 30);
         $value = $query->orderByDesc('updated_at')->orderByDesc('id')->value('value');
-        return $this->compare($value, $cfg['operator'], $cfg['value'] ?? '');
+        return TriggerMatcher::matches($value, $cfg['operator'], (string)($cfg['value'] ?? ''));
     }
 
     // Lease rows and re-check flow state inside advance; no worker reads another flow's run as its own.

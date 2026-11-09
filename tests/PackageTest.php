@@ -33,6 +33,8 @@ final class PackageTest extends TestCase
         $this->assertFalse(Route::has('jb.login'));
         $this->assertFalse(Route::has('jb.logout'));
         $this->assertTrue(Route::has('jb.sms.providers'));
+        $this->assertTrue(Route::has('jb.enroll.user'));
+        $this->assertTrue(Route::has('jb.enrollment.mode'));
     }
 
     public function test_package_migration_is_non_destructive_and_creates_audit(): void
@@ -48,6 +50,9 @@ final class PackageTest extends TestCase
         foreach (['jb_run_hashes','jb_flow_totals','jb_node_totals'] as $table) $this->assertTrue(Schema::hasTable($table));
         $smsMigration = require __DIR__.'/../database/migrations/2026_11_08_180000_add_journey_sms_providers.php';
         $smsMigration->up();
+        $manualMigration = require __DIR__.'/../database/migrations/2026_11_08_200000_add_journey_manual_enrollment_mode.php';
+        $manualMigration->up();
+        $this->assertTrue(Schema::hasColumn('jb_flows','enrollment_mode'));
         $this->assertTrue(Schema::hasTable('jb_sms_providers'));
         foreach (['provider_id','sender','receptor','message_text','provider_message_id'] as $column) {
             $this->assertTrue(Schema::hasColumn('jb_sms_logs',$column));
@@ -56,6 +61,7 @@ final class PackageTest extends TestCase
         $migration->up();
         $retention->up();
         $smsMigration->up();
+        $manualMigration->up();
         $migration->down();
         $retention->down();
         $this->assertTrue(Schema::hasTable('jb_runs'));

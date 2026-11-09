@@ -28,14 +28,7 @@ return [
         'timeout' => 15,
     ],
     'api' => [
-        // Comma-separated exact DNS names; excludes arbitrary/localhost endpoints.
-        'allowed_hosts' => array_values(array_filter(array_map('trim', explode(',', (string) env('JOURNEY_BUILDER_API_ALLOWED_HOSTS', ''))))),
         'enabled' => env('JOURNEY_BUILDER_API_ENABLED', false),
         'timeout' => 15,
-        // Tokens never saved in graph/DB. Choose the alias in the node editor.
-        'tokens' => array_filter([
-            'default' => env('JOURNEY_BUILDER_API_TOKEN'),
-            'secondary' => env('JOURNEY_BUILDER_API_TOKEN_SECONDARY'),
-        ]),
     ],
 ];

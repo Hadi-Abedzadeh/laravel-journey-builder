@@ -53,7 +53,7 @@ final class ManagedSmsTest extends TestCase
         ]);
         $nodes=[
             ['id'=>'start','type'=>'trigger','x'=>30,'y'=>30,'config'=>['section'=>'attributes','key'=>'foo','sign'=>'','value'=>'','operator'=>'exists']],
-            ['id'=>'sms1','type'=>'sms','x'=>50,'y'=>100,'config'=>['delivery_mode'=>'managed','provider_id'=>$providerId,'message'=>'سلام {{firstName}}']],
+            ['id'=>'sms1','type'=>'sms','x'=>50,'y'=>100,'config'=>['delivery_mode'=>'managed','provider_id'=>$providerId,'receptor_attribute'=>'smsPhone','receptor_sign'=>'','message'=>'سلام {{firstName}}']],
             ['id'=>'exit1','type'=>'exit','x'=>100,'y'=>220,'config'=>[]],
         ];
         $edges=[['id'=>'1','source'=>'start','target'=>'sms1','port'=>'next'],['id'=>'2','source'=>'sms1','target'=>'exit1','port'=>'success'],['id'=>'3','source'=>'sms1','target'=>'exit1','port'=>'failure']];
@@ -65,7 +65,7 @@ final class ManagedSmsTest extends TestCase
         foreach ([1,2,3] as $n) {
             $userId='member-'.$n;
             DB::table('member_data')->insert([
-                ['userId'=>$userId,'section'=>'attributes','key'=>'phone','value'=>'0912000000'.$n,'updated_at'=>$now],
+                ['userId'=>$userId,'section'=>'attributes','key'=>'smsPhone','value'=>'0912000000'.$n,'updated_at'=>$now],
                 ['userId'=>$userId,'section'=>'attributes','key'=>'firstName','value'=>'نام '.$n,'updated_at'=>$now],
             ]);
             DB::table('jb_runs')->insert([

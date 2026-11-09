@@ -5,7 +5,7 @@ const labels={trigger:'ورود کاربران',condition:'شرط رویداد',
 const icons={trigger:'▶',condition:'◇',attribute:'◈',split:'⑂',slot:'◷',delay:'◴',wait_event:'⌛',sms:'✉',api:'↗',exit:'■'};
 const colors={trigger:'#3182ee',condition:'#e0a434',attribute:'#e7a238',split:'#9d6ddd',slot:'#ed9563',delay:'#eb9463',wait_event:'#cf6d75',sms:'#14a985',api:'#3677d6',exit:'#8795a8'};
 const portLabels={next:'بعدی',yes:'بله',no:'خیر',a:'مسیر A',b:'مسیر B',event:'رویداد',timeout:'زمان تمام شد',success:'موفق',failure:'ناموفق'};
-const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:''},api:{url:'',method:'POST',token_source:'none',token_alias:'',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
+const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone',receptor_sign:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
 const days=['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
 const opNames={exists:'وجود داشته باشد',not_exists:'وجود نداشته باشد',equals:'برابر باشد',not_equals:'برابر نباشد',starts_with:'با مقدار شروع شود',not_starts_with:'با مقدار شروع نشود'};
 const $=id=>document.getElementById(id);
@@ -37,30 +37,32 @@ if(n.type==='sms'){
  html+=selectField('روش ارسال','cfg-delivery_mode',mode,[['managed','پنل پیامکی مدیریت‌شده (کاوه‌نگار)'],['legacy','اتصال پیامک قدیمی']]);
  html+='<div id="sms-managed-settings">'
    +selectField('پنل پیامک','cfg-provider_id',String(c.provider_id||0),[['0','پنل پیش‌فرض سیستم'],...(ui.smsProviders||[]).map(p=>[String(p.id),p.name])])
+   +field('Attribute شماره گیرنده (receptor)','cfg-receptor_attribute',c.receptor_attribute||'phone','text','dir="ltr" maxlength="50"')
+   +field('فیلتر sign شماره گیرنده (اختیاری)','cfg-receptor_sign',c.receptor_sign||'','text','dir="ltr" maxlength="30"')
    +textField('متن پیامک (message)','cfg-message',c.message||'',6)
-   +'<div class="help">متغیرها: {{firstName}}، {{lastName}}، {{phone}}، {{userId}} یا نام هر Attribute انگلیسی ذخیره‌شده. در زمان ارسال از دیتابیس خوانده می‌شوند. برای شماره گیرنده، تنظیمات receptor پنل پیامک استفاده می‌شود.</div>'
+   +'<div class="help">متغیرها: {{firstName}}، {{lastName}}، {{phone}}، {{userId}} یا نام هر Attribute انگلیسی ذخیره‌شده. در زمان ارسال از دیتابیس خوانده می‌شوند. شماره گیرنده از Attribute مشخص‌شده در همین گره خوانده می‌شود؛ تنظیمات پنل فقط sender و API-KEY را نگه می‌دارد.</div>'
    +'<div class="help"><a href="'+esc(ui.smsProvidersUrl||'#')+'" target="_blank" rel="noopener noreferrer">مدیریت پنل‌ها و معرفی پارامترهای message / sender / receptor / API-KEY</a></div>'
    +'</div><div id="sms-legacy-settings">'
    +field('کد Template قدیمی','cfg-template',c.template||'')
    +'<div class="help">فقط برای جرنی‌های قدیمی که از API پیامک JSON استفاده می‌کنند.</div></div>';
 }
 if(n.type==='api'){
- const authSource=c.token_source||(c.token_alias?'alias':'none');
+ const authSource=c.token_source==='secret'?'secret':'none';
  html+=field('آدرس HTTPS API','cfg-url',c.url||'','url','dir="ltr"')
   +selectField('متد HTTP','cfg-method',c.method||'POST',[['POST','POST'],['PUT','PUT'],['PATCH','PATCH']])
-  +selectField('احراز هویت درخواست','cfg-token_source',authSource,[['none','بدون توکن'],['alias','توکن از تنظیمات سرور (ENV)'],['secret','توکن اختصاصی برای همین گره']])
-  +'<div id="api-alias-settings">'+selectField('نام توکن ذخیره‌شده در سرور','cfg-token_alias',c.token_alias||'',[['','انتخاب کنید'],...(ui.aliases||[]).map(x=>[x,x])])+'</div>'
+  +selectField('احراز هویت درخواست','cfg-token_source',authSource,[['none','بدون توکن'],['secret','توکن اختصاصی برای همین درخواست']])
+
   +'<div id="api-secret-settings"><div class="field"><span>توکن اختصاصی (فقط هنگام ثبت/تعویض)</span><input id="cfg-secret" type="password" autocomplete="new-password" maxlength="4096" dir="ltr" placeholder="توکن جدید را اینجا وارد کنید"></div><div class="secret-state" id="secret-state"></div><div class="secret-tools"><button type="button" class="btn danger" id="clear-secret">حذف توکن ثبت‌شده</button></div><div class="help">توکن در جدول جدا و با APP_KEY رمزگذاری می‌شود. مقدار قبلی دوباره نمایش داده نمی‌شود؛ برای تغییر، توکن جدید وارد کنید و «ذخیره تغییرات» را بزنید.</div></div>'
   +'<div id="api-header-settings">'
   +selectField('محل قرارگیری توکن در درخواست','cfg-token_header',c.token_header||'bearer',[['bearer','Authorization: Bearer'],['x-api-key','X-API-Key'],['custom','هدر سفارشی X-...']])
   +'<div id="api-custom-header-settings">'+field('نام هدر سفارشی','cfg-token_custom_header',c.token_custom_header||'X-Access-Token','text','dir="ltr"')+'</div></div>'
   +textField('بدنه JSON (متغیرها قابل استفاده‌اند)','cfg-body',c.body||'{}',8)
-  +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}}. دامنه مقصد باید در JOURNEY_BUILDER_API_ALLOWED_HOSTS مجاز شده باشد. پاسخ 2xx موفق است، نه تایید انجام فرآیند مقصد.</div>';
+  +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}}. هر دامنه عمومی HTTPS بدون فهرست مجاز قابل استفاده است؛ آدرس‌های داخلی و IP خصوصی برای امنیت سرور مسدودند. پاسخ 2xx موفق است، نه تایید انجام فرآیند مقصد.</div>';
 }
 if(n.type==='exit')html+='<div class="muted-box">هنگام رسیدن کاربر به این مرحله، اجرای او پایان می‌یابد.</div>';
 if(!readonly)html+='<button class="btn danger" id="delete-node" style="width:100%;margin-top:15px">حذف گره</button>';
 box.innerHTML=html;
-const map={'cfg-section':'section','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-delivery_mode':'delivery_mode','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_alias':'token_alias','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body'};
+const map={'cfg-section':'section','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-receptor_sign':'receptor_sign','cfg-delivery_mode':'delivery_mode','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body'};
 for(const [input,key] of Object.entries(map)){const el=$(input);if(!el)continue;el.disabled=readonly;el.addEventListener('input',()=>{c[key]=['hours','percent','provider_id'].includes(key)?Number(el.value):el.value;dirty=true;const nbody=$('node-'+n.id)?.querySelector('.node-body');if(nbody)nbody.textContent=describe(n)})}
 if(n.type==='sms'){
  const modeInput=$('cfg-delivery_mode');
@@ -74,7 +76,6 @@ if(n.type==='api'){
  const authSource=$('cfg-token_source'), authHeader=$('cfg-token_header'), secretInput=$('cfg-secret');
  const authFields=()=>{
    const mode=authSource?.value||'none';
-   $('api-alias-settings')?.classList.toggle('api-hidden',mode!=='alias');
    $('api-secret-settings')?.classList.toggle('api-hidden',mode!=='secret');
    $('api-header-settings')?.classList.toggle('api-hidden',mode==='none');
    $('api-custom-header-settings')?.classList.toggle('api-hidden',mode==='none'||authHeader?.value!=='custom');
@@ -138,6 +139,36 @@ $('edit-title')?.addEventListener('input',()=>dirty=true);
 $('refresh')?.addEventListener('click',()=>location.reload());
 document.querySelectorAll('.palette-entry').forEach(item=>{item.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-jb-node',item.dataset.type);e.dataTransfer.effectAllowed='copy'});item.addEventListener('click',()=>{const v=$('viewport');addNode(item.dataset.type,v.scrollLeft+300,v.scrollTop+220)})});
 $('viewport').addEventListener('dragover',e=>e.preventDefault());$('viewport').addEventListener('drop',e=>{e.preventDefault();const type=e.dataTransfer.getData('text/x-jb-node');if(!Object.hasOwn(ports,type))return;const b=$('board').getBoundingClientRect();addNode(type,e.clientX-b.left,e.clientY-b.top)});
+// Four-way canvas movement: normal wheel = vertical, trackpad = both axes,
+// Shift+wheel = horizontal, drag an empty area = pan. Never interfere with node drag/ports.
+const canvas=$('viewport');
+canvas.classList.add('jb-pan-ready');
+canvas.addEventListener('wheel', e => {
+  if(e.ctrlKey || e.metaKey) return; // leave browser zoom available
+  e.preventDefault();
+  const unit=e.deltaMode===1?18:(e.deltaMode===2?canvas.clientHeight:1);
+  if(e.shiftKey){canvas.scrollLeft+=(e.deltaX+e.deltaY)*unit;}
+  else {canvas.scrollLeft+=e.deltaX*unit;canvas.scrollTop+=e.deltaY*unit;}
+},{passive:false});
+let pan=null;
+canvas.addEventListener('pointerdown', e => {
+  if(e.button!==0 && e.button!==1) return;
+  if(e.button===0 && e.target.closest('.node,.socket,.wire')) return;
+  if(e.pointerType==='touch') return; // keep native touch scrolling
+  pan={id:e.pointerId,x:e.clientX,y:e.clientY,left:canvas.scrollLeft,top:canvas.scrollTop};
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('jb-panning');
+  e.preventDefault();
+});
+canvas.addEventListener('pointermove', e => {
+  if(!pan || e.pointerId!==pan.id) return;
+  canvas.scrollLeft=pan.left+pan.x-e.clientX;
+  canvas.scrollTop=pan.top+pan.y-e.clientY;
+});
+const finishPan=e=>{if(pan && e.pointerId===pan.id){pan=null;canvas.classList.remove('jb-panning')}};
+canvas.addEventListener('pointerup',finishPan);
+canvas.addEventListener('pointercancel',finishPan);
+canvas.addEventListener('lostpointercapture',finishPan);
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 redraw();$('viewport').scrollLeft=100;$('viewport').scrollTop=0;
 })();

@@ -26,7 +26,7 @@ final class ManagedSmsQueue
             : $providerQuery->where('is_default', 1)->first();
         if (!$provider) throw new RuntimeException('No enabled SMS provider selected/default.');
         $renderer = app(SmsTemplateRenderer::class);
-        $receptor = $renderer->receptor($run->user_id, $provider);
+        $receptor = $renderer->receptor($run->user_id, $config);
         $message = $renderer->render($run->user_id, (string) ($config['message'] ?? ''));
         $now = now('UTC');
         // The unique(run_id,node_id) constraint is the final barrier against duplicate enqueues.

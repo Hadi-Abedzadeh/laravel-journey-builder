@@ -8,10 +8,14 @@ use RuntimeException;
 /** Only explicit, allowlisted attribute placeholders are interpolated; no PHP/eval/templates. */
 final class SmsTemplateRenderer
 {
-    public function receptor(string $userId, object $provider): string
+    public function receptor(string $userId, array $nodeConfig): string
     {
-        $attribute = (string) $provider->receptor_attribute;
-        $value = $this->attribute($userId, $attribute, (string) ($provider->source_sign ?? ''));
+        $attribute = (string) ($nodeConfig['receptor_attribute'] ?? 'phone');
+        $sign = (string) ($nodeConfig['receptor_sign'] ?? '');
+        if (!preg_match('/^[A-Za-z][A-Za-z0-9_]{0,49}$/D', $attribute) || strlen($sign) > 30) {
+            throw new RuntimeException('Invalid receptor settings on journey SMS node.');
+        }
+        $value = $this->attribute($userId, $attribute, $sign);
         $value = strtr(trim((string) $value), ['۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9','٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
         // Canonical domestic mobile number for reliable response matching.
         if (preg_match('/^\+989(\d{9})$/D', $value, $m) || preg_match('/^00989(\d{9})$/D', $value, $m)) {

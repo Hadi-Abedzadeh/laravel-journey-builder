@@ -6,6 +6,7 @@ use OpenJourney\LaravelJourneyBuilder\Services\Definition;
 use OpenJourney\LaravelJourneyBuilder\Services\ApiGateway;
 use OpenJourney\LaravelJourneyBuilder\Services\TypedWhere;
 use OpenJourney\LaravelJourneyBuilder\Services\RetryService;
+use OpenJourney\LaravelJourneyBuilder\Services\ManualEnrollment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -191,6 +192,37 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             return response()->json(['ok'=>false,'reason'=>$result],409)->header('Cache-Control','no-store');
         }
         return response()->json(['ok'=>true,'status'=>'ready'])->header('Cache-Control','no-store');
+    }
+
+    /** Changing mode affects future enrollments only; existing runs continue as usual. */
+    public function enrollmentMode(Request $request, int $id): JsonResponse
+    {
+        $v = $request->validate(['mode'=>'required|in:automatic,manual']);
+        $db = $this->db();
+        if (!\Illuminate\Support\Facades\Schema::connection(config('journey_builder.connection','sqlsrv'))->hasColumn('jb_flows','enrollment_mode')) {
+            throw ValidationException::withMessages(['mode'=>'ابتدا Migration ورود دستی را اجرا کنید.']);
+        }
+        $db->transaction(function () use ($db,$id,$v) {
+            $flow = $db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
+            abort_unless($flow,404);
+            $db->table('jb_flows')->where('id',$id)->update(['enrollment_mode'=>$v['mode'],'updated_at'=>now('UTC')]);
+        });
+        return response()->json(['ok'=>true,'mode'=>$v['mode']])->header('Cache-Control','no-store, private');
+    }
+
+    public function enrollUser(Request $request, int $id, ManualEnrollment $service): JsonResponse
+    {
+        $v = $request->validate(['user_id'=>'required|string|max:100']);
+        try {
+            $result = $service->commit($id, $v['user_id']);
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['user_id'=>$e->getMessage()]);
+        }
+        if (!$result['enrolled']) {
+            $reason = $result['already_enrolled'] ? 'این کاربر قبلاً وارد همین جرنی شده است.' : 'آخرین مقدار Attribute کاربر با شرط ورود جرنی مطابقت ندارد.';
+            throw ValidationException::withMessages(['user_id'=>$reason]);
+        }
+        return response()->json(['ok'=>true,'run_id'=>$result['run_id']])->header('Cache-Control','no-store, private');
     }
 
     public function status(Request $request, int $id): JsonResponse

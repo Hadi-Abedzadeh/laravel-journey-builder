@@ -15,3 +15,12 @@
 .secret-tools{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap}
 .secret-tools .btn{font-size:11px;padding:6px 9px}
 .api-hidden{display:none!important}
+
+/* Shared shell, functional without optional pro skin */
+.nav-product{font-size:11px;color:#99a5b8;font-weight:600;white-space:nowrap}
+.jb-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;padding:17px 28px;background:white;border-top:1px solid var(--line);font-size:12px;color:#7f8ba0}
+.jb-footer .row{gap:18px}
+.jb-footer a{color:#6e7f98}
+.viewport.jb-panning{cursor:grabbing!important;user-select:none}
+.viewport.jb-pan-ready{cursor:grab}
+@media(max-width:760px){.nav-product{display:none}.jb-footer{padding:15px}}

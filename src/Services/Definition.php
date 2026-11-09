@@ -73,11 +73,15 @@ final class Definition
             if ($type === 'sms') {
                 $mode = $cfg['delivery_mode'] ?? 'legacy'; // Older stored graphs stay on legacy gateway.
                 if (!in_array($mode, ['managed', 'legacy'], true)) self::fail('روش ارسال پیامک نامعتبر است.');
-                $allowed = ['delivery_mode','template','message','provider_id'];
+                $allowed = ['delivery_mode','template','message','provider_id','receptor_attribute','receptor_sign'];
                 if (array_diff(array_keys($cfg), $allowed)) self::fail('تنظیمات ناشناخته گره پیامک.');
                 self::short($cfg['template'] ?? '', 150, 'sms template');
                 self::short($cfg['message'] ?? '', 1800, 'sms message');
                 if ($mode === 'managed') {
+                    // Recipient comes from this journey node, never from provider-level settings.
+                    $receptorKey = (string) ($cfg['receptor_attribute'] ?? 'phone');
+                    if (!preg_match('/^[A-Za-z][A-Za-z0-9_]{0,49}$/D', $receptorKey)) self::fail('نام Attribute شماره گیرنده معتبر نیست.');
+                    self::short($cfg['receptor_sign'] ?? '', 30, 'receptor sign');
                     $id = $cfg['provider_id'] ?? 0;
                     if ((!is_int($id) && !ctype_digit((string)$id)) || (int)$id < 0) self::fail('پنل انتخاب‌شده برای پیامک معتبر نیست.');
                     if ($publish && trim((string)($cfg['message'] ?? '')) === '') self::fail('متن پیامک اجباری است.');
@@ -91,15 +95,14 @@ final class Definition
             }
             if ($type === 'api') {
                 self::short($cfg['url'] ?? '', 1000, 'API URL');
-                if ($publish && !ApiGateway::isAllowedUrl((string)($cfg['url'] ?? ''))) self::fail('آدرس API باید HTTPS و روی یک دامنه مجاز در تنظیمات سرور باشد.');
+                if ($publish && !ApiGateway::isAllowedUrl((string)($cfg['url'] ?? ''))) self::fail('آدرس API باید HTTPS با نام دامنه عمومی معتبر باشد.');
                 if (!in_array($cfg['method'] ?? 'POST', ['POST', 'PUT', 'PATCH'], true)) self::fail('متد API معتبر نیست.');
                 // Explicit allowlist: no plaintext secret can be smuggled into graph_json.
-                $allowedApiConfig = ['url','method','token_source','token_alias','token_header','token_custom_header','body'];
+                $allowedApiConfig = ['url','method','token_source','token_alias','token_header','token_custom_header','body']; // token_alias accepted only for decoding legacy drafts
                 if (array_diff(array_keys($cfg), $allowedApiConfig)) self::fail('تنظیمات ناشناخته API مجاز نیست؛ توکن را در بخش امن ثبت کنید.');
                 self::short($cfg['token_alias'] ?? '', 60, 'API token alias');
                 $source = $cfg['token_source'] ?? (($cfg['token_alias'] ?? '') !== '' ? 'alias' : 'none');
-                if (!in_array($source, ['none','alias','secret'], true)) self::fail('روش احراز هویت API معتبر نیست.');
-                if ($publish && $source === 'alias' && !array_key_exists($cfg['token_alias'] ?? '', config('journey_builder.api.tokens', []))) self::fail('کلید API انتخاب‌شده تعریف نشده است.');
+                if (!in_array($source, ['none','secret'], true)) self::fail('هر گره API فقط می‌تواند بدون توکن یا با توکن اختصاصی همان گره اجرا شود.');
                 if (!in_array($cfg['token_header'] ?? 'bearer', ['bearer','x-api-key','custom'], true)) self::fail('نوع هدر توکن نامعتبر است.');
                 self::short($cfg['token_custom_header'] ?? '', 64, 'API token header');
                 if (($cfg['token_header'] ?? '') === 'custom' && $source !== 'none' &&

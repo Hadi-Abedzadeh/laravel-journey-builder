@@ -19,6 +19,8 @@ Route::middleware(['web', DashboardAccess::class])->prefix(config('journey_build
         Route::get('/flows/{id}',[JourneyBuilderController::class,'show'])->whereNumber('id')->name('show');
         Route::put('/flows/{id}',[JourneyBuilderController::class,'save'])->whereNumber('id')->name('save');
         Route::put('/flows/{id}/nodes/{nodeId}/token',[JourneyBuilderController::class,'apiToken'])->whereNumber('id')->where('nodeId','[A-Za-z0-9_-]+')->name('token');
+        Route::post('/flows/{id}/enrollment-mode',[JourneyBuilderController::class,'enrollmentMode'])->whereNumber('id')->name('enrollment.mode');
+        Route::post('/flows/{id}/enroll-user',[JourneyBuilderController::class,'enrollUser'])->whereNumber('id')->name('enroll.user');
         Route::post('/flows/{id}/status',[JourneyBuilderController::class,'status'])->whereNumber('id')->name('status');
         Route::post('/flows/{id}/runs/{runId}/retry',[JourneyBuilderController::class,'retryRun'])->whereNumber('id')->whereNumber('runId')->name('retry.run');
 });

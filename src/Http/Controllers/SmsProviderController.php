@@ -27,8 +27,6 @@ final class SmsProviderController extends Controller
         return $request->validate([
             'name'=>'required|string|max:120',
             'sender'=>['required','string','max:24','regex:/^\+?[0-9]{3,23}$/D'],
-            'receptor_attribute'=>['required','string','max:50','regex:/^[A-Za-z0-9_]{1,50}$/D'],
-            'source_sign'=>'nullable|string|max:30',
             'api_key'=>[$create?'required':'nullable','string','max:2048','regex:/^[A-Za-z0-9_-]+$/D'],
             'is_enabled'=>'sometimes|boolean',
         ]);
@@ -43,8 +41,8 @@ final class SmsProviderController extends Controller
             $db->table('jb_sms_providers')->insert([
                 'code'=>'sp_'.bin2hex(random_bytes(12)), 'name'=>$v['name'],
                 'driver'=>'kavenegar', 'sender'=>$v['sender'],
-                'receptor_attribute'=>$v['receptor_attribute'],
-                'source_sign'=>$v['source_sign']??null,
+                // Legacy NOT NULL column is retained for schema compatibility; it is never used for routing.
+                'receptor_attribute'=>'phone', 'source_sign'=>null,
                 'encrypted_api_key'=>Crypt::encryptString($v['api_key']),
                 'is_enabled'=>(bool)($v['is_enabled']??false), 'is_default'=>false,
                 'created_at'=>$now,'updated_at'=>$now,
@@ -65,7 +63,6 @@ final class SmsProviderController extends Controller
             if (!$enabled && $this->hasUnresolved($id)) throw ValidationException::withMessages(['is_enabled'=>'پنل دارای پیامک آماده ارسال است و نمی‌تواند غیرفعال شود.']);
             $changes = [
                 'name'=>$v['name'], 'sender'=>$v['sender'],
-                'receptor_attribute'=>$v['receptor_attribute'], 'source_sign'=>$v['source_sign']??null,
                 'is_enabled'=>$enabled,'updated_at'=>now('UTC'),
             ];
             if (!empty($v['api_key'])) $changes['encrypted_api_key']=Crypt::encryptString($v['api_key']);

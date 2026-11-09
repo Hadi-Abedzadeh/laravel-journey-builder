@@ -32,3 +32,8 @@ php artisan journey-builder:prune --flow=3 --batch=200 --commit
 Retry and prune are operations with side effects only with `--commit`. Retrying does not send immediately: the next `tick` does. Failed/unknown runs are retained. Unknown SMS/API responses cannot be re-sent by the retry action because HTTP uncertainty does not prove non-delivery.
 
 Dashboard requires host authentication/authorization; default is a Laravel Gate, with loopback-local-only development mode. SMS and API senders are disabled by default. The package deliberately does not distribute a font binary: copy your own licensed Vazirmatn font to the published assets path if desired.
+
+
+## v3.3: per-journey recipient and manual test enrollment
+
+SMS recipient attribute and optional sign are configured **inside each managed SMS node**, rather than on SMS provider settings. For new flows, create a manual-only journey and add an existing test user via its detail page or the `journey-builder:enroll-user` command. See `README_V3_3_FA.md` for migration and safety notes.

@@ -1,0 +1,184 @@
+/* Journey Builder • Professional UI concept v1
+   Optional additive theme for existing resources/assets/style.css.
+   Does NOT modify business logic, Laravel routes, or the package's original CSS.
+   Place alongside public/vendor/journey-builder/style.css; load AFTER style.css.
+   Vazirmatn WOFF2 is intentionally not bundled; use your existing font asset.
+*/
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('./vazirmatn-fanum.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  --jb-bg: #f5f7fc;
+  --jb-surface: #ffffff;
+  --jb-line: #e6eaf3;
+  --jb-text: #1c2941;
+  --jb-subtle: #73819a;
+  --jb-accent: #6258e8;
+  --jb-accent-hover: #5147d4;
+  --jb-accent-tint: #f1efff;
+  --jb-teal: #13a58a;
+  --jb-red: #d34866;
+  --jb-amber: #b77b24;
+  --jb-radius: 16px;
+  --jb-shadow: 0 6px 26px rgba(38,49,85,.055),0 1px 3px rgba(38,49,85,.03);
+  --ink:var(--jb-text);
+  --muted:var(--jb-subtle);
+  --line:var(--jb-line);
+  --blue:var(--jb-accent);
+  --light:var(--jb-bg);
+}
+html { scroll-behavior:smooth; }
+body {
+  font-family:'Vazirmatn',Tahoma,Arial,sans-serif !important;
+  background:var(--jb-bg) !important;
+  color:var(--jb-text) !important;
+  font-size:13px;
+  line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+::selection { background:#dedbff;color:#2d277f; }
+a { color:var(--jb-accent); }
+a:hover { color:var(--jb-accent-hover); }
+button,input,select,textarea { font-family:'Vazirmatn',Tahoma,Arial,sans-serif !important; }
+button,a,input,select,textarea { transition:color .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease; }
+input,select,textarea,
+.sms-field input,.sms-field select { border:1px solid #dce2ee !important;border-radius:11px !important;background:#fff !important;color:var(--jb-text) !important; }
+input:hover,textarea:hover,select:hover { border-color:#bcc9e1 !important; }
+input:focus,textarea:focus,select:focus { border-color:#8f85f4 !important;outline:0 !important;box-shadow:0 0 0 4px rgba(98,88,232,.12) !important; }
+:focus-visible { outline:2px solid #786de8;outline-offset:3px; }
+/* Shared global navigation: once the package uses one Blade component,
+   these rules apply to every page without further stylesheet changes. */
+.nav {
+  position:relative;z-index:20;display:flex;align-items:center;gap:6px;
+  min-height:72px;padding:10px clamp(15px,3.4vw,52px) !important;
+  border-bottom:1px solid var(--jb-line) !important;
+  background:rgba(255,255,255,.96) !important;
+  box-shadow:0 1px 8px rgba(28,41,65,.03);
+}
+.nav-brand {
+  display:inline-flex;align-items:center;gap:9px;
+  padding:5px 15px 5px 0;margin-left:21px;
+  color:#25335a !important;font-weight:850!important;font-size:17px!important;
+  letter-spacing:-.2px;white-space:nowrap;
+}
+.nav-brand::first-letter { color:var(--jb-accent); }
+.nav a:not(.nav-brand) {
+  position:relative;padding:10px 14px;border-radius:10px;
+  color:#68758d!important;font-size:12.5px;font-weight:700;
+  white-space:nowrap;
+}
+.nav a:not(.nav-brand):hover{background:#f4f4ff;color:var(--jb-accent)!important}
+.nav a.current:not(.nav-brand){background:var(--jb-accent-tint);color:var(--jb-accent)!important}
+.nav .spacer{flex:1}
+/* Headlines and cards */
+.wrap { max-width:1450px;padding:clamp(16px,2.5vw,34px) clamp(16px,3.4vw,50px); }
+h1,h2,h3 { color:#1a2842;line-height:1.5; }
+.heading { margin-bottom:24px; }
+.heading h1 { font-size:24px;font-weight:850;letter-spacing:-.25px; }
+.subtle,.muted,.help,.sms-hint { color:var(--jb-subtle); }
+.card,.panel,.stat,.metric,.sms-card {
+  background:var(--jb-surface)!important;
+  border:1px solid var(--jb-line)!important;
+  border-radius:var(--jb-radius)!important;
+  box-shadow:var(--jb-shadow)!important;
+}
+.card,.panel,.sms-card { padding:23px!important;margin-bottom:19px; }
+.section-title,.sms-card h2 { font-size:15px;font-weight:800; }
+.statgrid,.metrics{gap:14px}
+.stat,.metric { min-height:112px;padding:19px 22px!important;position:relative;overflow:hidden; }
+.stat::before,.metric::before{
+  content:'';position:absolute;right:0;top:21px;bottom:21px;width:3px;border-radius:9px 0 0 9px;
+  background:linear-gradient(180deg,var(--jb-accent),#b6aefa);
+}
+.stat strong,.metric strong { color:#1e2b43;font-size:26px;font-weight:850;letter-spacing:.2px; }
+.stat small { font-size:12px; }
+.cols2 {gap:18px}
+/* Table / data dense pages */
+.table-scroll,.scroll { border-radius:12px;scrollbar-color:#cbd1e1 transparent; }
+.table th,.table td,th,td { border-bottom-color:#eef1f7!important; }
+.table th, th { background:#f8f9fd!important;color:#71809a!important;font-weight:750; }
+.table tbody tr:hover td,tbody tr:hover td { background:#f8f8ff!important; }
+.table th,.table td { padding-top:15px;padding-bottom:15px; }
+.table tbody tr:last-child td{border-bottom:0}
+.code,code {font-family:ui-monospace,SFMono-Regular,Consolas,monospace;}
+/* Buttons */
+.btn,.sms-btn,button:not(.socket):not(.iconbox) {
+  border-radius:11px;
+}
+.btn {padding:9px 15px;border-color:#dfe5ef;color:#445471;font-weight:750;box-shadow:0 1px 1px rgba(30,40,65,.025)}
+.btn:hover { background:#f7f8fe;transform:translateY(-1px); }
+.btn.primary,.sms-btn:not(.secondary):not(.danger),button.primary {
+  color:white!important;border-color:var(--jb-accent)!important;
+  background:linear-gradient(135deg,#6b61f3,#5449db)!important;
+  box-shadow:0 5px 12px rgba(98,88,232,.17);
+}
+.btn.primary:hover,.sms-btn:not(.secondary):not(.danger):hover {background:linear-gradient(135deg,#6056e7,#483cc6)!important;box-shadow:0 7px 18px rgba(98,88,232,.25)}
+.btn.danger,.sms-btn.danger{color:#c33a58}
+.btn:disabled,button:disabled{transform:none!important;box-shadow:none!important}
+.badge,.sms-badge,.pill { font-weight:750;border-radius:999px;padding:7px 12px; }
+.badge.active,.badge.sent,.badge.exited,.sms-badge.good{background:#e6f7f0!important;color:#148566!important}
+.badge.failed,.err{background:#fff0f3!important;color:#c64261!important}
+.badge.paused,.badge.waiting,.badge.unknown,.warn{background:#fff5e4!important;color:#a87322!important}
+.pill{background:var(--jb-accent-tint);color:var(--jb-accent)}
+.muted-box,.sms-caution {background:#f7f8ff!important;border:1px solid #e8e9fc!important;color:#677492!important;border-radius:12px!important}
+.toast {background:#2d3457;border:1px solid #45446c;border-radius:14px;box-shadow:0 14px 38px rgba(17,24,50,.19)}
+/* Designer: calm workspace and clearer movable nodes */
+.editor-layout { background:#f1f4fa;grid-template-columns:240px minmax(400px,1fr) 305px; }
+.side {background:#fff!important;border-left:1px solid var(--jb-line)!important;padding:22px!important;}
+.side h3{font-size:14px;font-weight:850;}
+.palette-label {font-weight:850;letter-spacing:.1px;color:#9aa4b9;font-size:10px;}
+.palette-entry{
+  background:#fff!important;border:1px solid #e7eaf3!important;
+  border-radius:12px!important;padding:11px 12px!important;margin-bottom:8px!important;
+  box-shadow:0 2px 7px rgba(36,50,81,.025);
+}
+.palette-entry:hover {transform:translateX(-2px);border-color:#d0cafa!important;background:#faf9ff!important;box-shadow:0 5px 14px rgba(80,76,140,.09)}
+.palette-entry .iconbox {border-radius:10px!important;width:32px;height:32px;}
+.workspace{min-width:0;background:#f5f7fc}
+.editor-toolbar{padding:14px 20px!important;min-height:72px;border-bottom:1px solid var(--jb-line)!important;background:#fff!important;gap:10px}
+.editor-toolbar h2{font-size:16px;font-weight:850}
+.viewport {
+  background-color:#f7f8fd!important;
+  background-image:radial-gradient(circle,#cfd7e8 1px,transparent 1px)!important;
+  background-size:23px 23px!important;
+  scrollbar-color:#bbc7dc transparent;
+}
+.node{
+  background:#fff!important;border:1px solid #e1e4ee!important;
+  border-top:3px solid var(--accent,var(--jb-accent))!important;
+  border-radius:14px!important;
+  box-shadow:0 9px 26px rgba(30,47,87,.11),0 1px 3px rgba(24,41,72,.045)!important;
+  overflow:visible;
+}
+.node.selected{box-shadow:0 0 0 3px #d3ceff,0 14px 34px rgba(37,44,100,.18)!important}
+.node-head {background:#fff!important;border-bottom:1px solid #f1f2f7!important;border-radius:12px 12px 0 0!important;padding:14px 15px!important}
+.node-head strong{font-size:12.5px;color:#2b3854}
+.node-body {font-size:11px;color:#72819b;padding:15px;min-height:51px}
+.node-head .iconbox{border-radius:9px}
+.socket{box-shadow:0 0 0 2px #fff,0 0 0 3px var(--accent)!important;}
+.wires path.wire{stroke:#9da8c2;stroke-width:2.5;}
+.inspector .field span,.field label{font-weight:700;color:#6d7b94}
+.secret-state {border-radius:11px!important}
+/* Shared footer preview. The Blade markup will be centralized after approval. */
+.jb-footer {
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;
+  padding:20px clamp(16px,3.4vw,52px);margin-top:auto;
+  background:#fff;border-top:1px solid var(--jb-line);
+  font-size:12px;color:#8490a7;
+}
+.jb-footer a{color:#596a87;font-weight:700}
+.jb-footer a:hover{color:var(--jb-accent)}
+/* SMS pages currently use inline legacy styles; these selectors provide a gentle override. */
+.sms-settings {max-width:1240px!important;}
+.sms-card,.sms-settings .sms-card {box-shadow:var(--jb-shadow)!important}
+.sms-btn.secondary {background:#f1efff!important;color:#6457d7!important}
+.sms-badge{background:#f2f3fa!important;color:#596782!important}
+@media (max-width:1150px){.editor-layout{grid-template-columns:210px minmax(350px,1fr) 255px}.side{padding:14px!important}}
+@media (max-width:900px){.nav{gap:4px;overflow-x:auto;flex-wrap:nowrap}.nav-brand{margin-left:10px}.nav a:not(.nav-brand){padding:9px 10px}}
+@media (max-width:760px){.nav{min-height:60px;padding:10px 13px!important}.wrap{padding:17px 14px}.heading h1{font-size:20px}.card,.panel,.sms-card{padding:17px!important}.statgrid,.cols2,.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.editor-layout{display:flex;flex-direction:column;height:auto}.side{overflow:auto}.editor-toolbar{padding:10px 14px!important}.workspace{min-height:440px;height:68vh}.jb-footer{padding:18px}}
+@media (max-width:500px){.statgrid,.cols2,.metrics{grid-template-columns:1fr}.stat,.metric{min-height:95px}.nav-brand{font-size:14px!important}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}button,a,input,select,textarea,.palette-entry{transition:none!important}}

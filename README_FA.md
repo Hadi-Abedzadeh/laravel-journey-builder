@@ -53,7 +53,6 @@ JOURNEY_BUILDER_SMS_ENABLED=false
 JOURNEY_BUILDER_SMS_URL=
 JOURNEY_BUILDER_SMS_TOKEN=
 JOURNEY_BUILDER_API_ENABLED=false
-JOURNEY_BUILDER_API_ALLOWED_HOSTS=api.example.org
 ```
 
 `JOURNEY_BUILDER_AUTO_SCHEDULE=true` فقط در پروژه‌های تازه‌ای فعال شود که این دستورات قبلاً در `routes/console.php` زمان‌بندی نشده‌اند. Scheduler میزبان باید واقعاً اجرا شود (مثل `php artisan schedule:work` در توسعه، یا cron سرور در Production).
@@ -178,3 +177,12 @@ php artisan vendor:publish --tag=journey-builder-config
 - برای API از Host allowlist استفاده می‌شود؛ در سطح شبکه هم دسترسی به IPهای خصوصی و Metadata Endpointها باید محدود شود (DNS rebinding/SSRF mitigation).
 - چند جرنی می‌توانند به یک کاربر پیامک مستقل ارسال کنند؛ Rate limit سراسری و جلوگیری از تداخل بازاریابی هنوز افزوده نشده است.
 - Asset و Route به طور خودکار از پکیج لود می‌شوند اما انتشار Composer/عملکرد در محیط واقعی توسط خودتان پس از Push و نصب باید آزموده شود.
+
+
+## v3.3: per-journey recipient and manual test enrollment
+
+SMS recipient attribute and optional sign are configured **inside each managed SMS node**, rather than on SMS provider settings. For new flows, create a manual-only journey and add an existing test user via its detail page or the `journey-builder:enroll-user` command. See `README_V3_3_FA.md` for migration and safety notes.
+
+## ارتقا از نسخه ۳.۳ به ۳.۴
+
+راهنمای تغییرات منو، فوتر، حرکت بوم، توکن‌های مجزای API و پوسته اختیاری را در `README_V3_4_FA.md` ببینید.
