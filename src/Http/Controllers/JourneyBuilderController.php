@@ -20,6 +20,29 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         return DB::connection(config('journey_builder.connection', 'sqlsrv'));
     }
 
+    /**
+     * Pausing stops new processing but is not equivalent to a fresh draft.
+     * Never rewrite the graph after a member has entered, completed or logged an action.
+     */
+    private function isEditableFlow(\Illuminate\Database\ConnectionInterface $db, object $flow): bool
+    {
+        if (!in_array($flow->status, ['draft', 'paused'], true)) {
+            return false;
+        }
+
+        // Preserve historical node IDs / flow revisions, including compacted runs.
+        foreach ([
+            'jb_runs', 'jb_run_hashes', 'jb_flow_totals', 'jb_node_totals',
+            'jb_step_logs', 'jb_sms_logs', 'jb_api_logs', 'jb_retry_audit',
+        ] as $table) {
+            if ($db->table($table)->where('flow_id', $flow->id)->exists()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // Dedicated list page; never mixes the management table with the drag/drop canvas.
     public function index()
     {
@@ -45,7 +68,8 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         // Expose only existence of a secret, never its ciphertext or plaintext.
         $secretNodeIds=$this->db()->table('jb_api_credentials')->where('flow_id',$id)->pluck('node_id')->all();
         $smsProviders=$this->db()->table('jb_sms_providers')->where('is_enabled',1)->whereNull('deleted_at')->orderBy('name')->get(['id','name'])->map(static fn($p)=>['id'=>$p->id,'name'=>$p->name])->all();
-        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders'))->header('Cache-Control','no-store, private');
+        $canEdit = $this->isEditableFlow($this->db(), $flow);
+        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders','canEdit'))->header('Cache-Control','no-store, private');
     }
 
     public function show(Request $request, int $id)
@@ -114,12 +138,15 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $db->transaction(function () use ($db,$id,$v,$graph) {
             $flow=$db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
             abort_unless($flow,404);
-            if ($flow->status!=='draft' || $db->table('jb_runs')->where('flow_id',$id)->exists() || $db->table('jb_run_hashes')->where('flow_id',$id)->exists()) {
-                throw ValidationException::withMessages(['graph'=>'برای حفظ اجراها، فقط جرنی Draft بدون سابقه اجرا قابل ویرایش است.']);
+            if (!$this->isEditableFlow($db, $flow)) {
+                throw ValidationException::withMessages(['graph'=>'ویرایش فقط برای جرنی پیش‌نویس یا متوقف‌شده بدون سابقه اجرا مجاز است. برای جرنی دارای سابقه اجرا، نسخه جدید بسازید.']);
             }
             $db->table('jb_flows')->where('id',$id)->update([
                 'title'=>$v['title'], 'graph_json'=>json_encode($graph,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
                 'revision'=>$flow->revision+1, 'updated_at'=>now('UTC'),
+                // If a paused flow was previously scanned without enrolling anyone,
+                // a changed trigger must re-scan the source from the beginning.
+                'enroll_cursor_at'=>null, 'enroll_cursor_id'=>0,
             ]);
             // Purge credentials for removed API nodes or nodes switched away from manual-token mode.
             $secretIds = array_values(array_map(
@@ -149,8 +176,8 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $db->transaction(function () use ($db, $id, $nodeId, $input, $clear) {
             $flow = $db->table('jb_flows')->where('id', $id)->lockForUpdate()->first();
             abort_unless($flow, 404);
-            if ($flow->status !== 'draft' || $db->table('jb_runs')->where('flow_id', $id)->exists() || $db->table('jb_run_hashes')->where('flow_id',$id)->exists()) {
-                throw ValidationException::withMessages(['token'=>'توکن جرنی فعال یا دارای سابقه اجرا قابل تغییر نیست.']);
+            if (!$this->isEditableFlow($db, $flow)) {
+                throw ValidationException::withMessages(['token'=>'توکن تنها برای جرنی پیش‌نویس یا متوقف‌شده بدون سابقه اجرا قابل تغییر است.']);
             }
             $nodes = json_decode($flow->graph_json, true, 512, JSON_THROW_ON_ERROR)['nodes'] ?? [];
             $node = collect($nodes)->first(fn($n) => $n['id'] === $nodeId && $n['type'] === 'api');
