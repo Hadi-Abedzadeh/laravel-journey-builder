@@ -3,6 +3,7 @@ namespace OpenJourney\LaravelJourneyBuilder\Console\Commands;
 
 use Illuminate\Console\Command;
 use OpenJourney\LaravelJourneyBuilder\Services\SmsDispatcher;
+use OpenJourney\LaravelJourneyBuilder\Services\CommandMonitor;
 
 final class JourneyBuilderSmsDispatch extends Command
 {
@@ -13,7 +14,7 @@ final class JourneyBuilderSmsDispatch extends Command
     {
         $batch = (int) $this->option('batch');
         if ($batch < 1 || $batch > 5000) { $this->error('Batch must be 1..5000.'); return self::FAILURE; }
-        $this->line(json_encode($dispatcher->dispatch($batch), JSON_UNESCAPED_UNICODE));
+        $this->line(json_encode(app(CommandMonitor::class)->run('sms-dispatch', fn()=>$dispatcher->dispatch($batch)), JSON_UNESCAPED_UNICODE));
         return self::SUCCESS;
     }
 }

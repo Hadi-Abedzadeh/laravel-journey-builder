@@ -1,3 +1,6 @@
+<!-- Monitoring update v0.3.4-beta.4 -->
+> v0.3.4-beta.4: New monitoring dashboard (`/journeys/monitoring`), reversible soft delete, and revision-safe editing of paused journeys. Run migration `2026_11_09_150000_add_journey_monitoring_and_revision_tables.php` before using the updated dashboard. See `README_V3_5_FA.md`.
+
 ## v3.2 managed SMS provider update
 
 See [README_SMS_V3_2_FA.md](README_SMS_V3_2_FA.md) for Kavenegar provider management, encrypted API keys, additive SQL Server migration and chunked delivery command (`journey-builder:sms-dispatch`). Delivery is disabled by default. Older SMS nodes retain their legacy API behavior.

@@ -98,8 +98,13 @@ final class ApiGateway
         $source = (string)($config['token_source'] ?? 'none');
         $token = null;
         if ($source === 'secret') {
-            $encrypted = TypedWhere::eq(DB::connection(config('journey_builder.connection','sqlsrv'))
-                ->table('jb_api_credentials')->where('flow_id', $flow->id), 'node_id', $run->node_id, 80)->value('encrypted_token');
+            // Runs on earlier revisions must use the matching encrypted token snapshot.
+            $historical = (int)$run->revision !== (int)$flow->revision;
+            $credentialTable = $historical ? 'jb_revision_credentials' : 'jb_api_credentials';
+            $credentialQuery = DB::connection(config('journey_builder.connection','sqlsrv'))
+                ->table($credentialTable)->where('flow_id', $flow->id);
+            if ($historical) $credentialQuery->where('revision', $run->revision);
+            $encrypted = TypedWhere::eq($credentialQuery, 'node_id', $run->node_id, 80)->value('encrypted_token');
             if (!is_string($encrypted) || $encrypted === '') return ['status'=>'failed','http_status'=>null,'error'=>'API token not configured'];
             try { $token = Crypt::decryptString($encrypted); }
             catch (\Throwable $e) { return ['status'=>'failed','http_status'=>null,'error'=>'API token could not be decrypted']; }

@@ -3,6 +3,7 @@
 namespace OpenJourney\LaravelJourneyBuilder\Console\Commands;
 
 use OpenJourney\LaravelJourneyBuilder\Services\Engine;
+use OpenJourney\LaravelJourneyBuilder\Services\CommandMonitor;
 use Illuminate\Console\Command;
 
 class JourneyBuilderTick extends Command
@@ -12,7 +13,7 @@ class JourneyBuilderTick extends Command
 
     public function handle(Engine $engine): int
     {
-        $result=$engine->tick((int)$this->option('batch'));
+        $result=app(CommandMonitor::class)->run('tick', fn()=>$engine->tick((int)$this->option('batch')));
         $this->line(json_encode($result));
         return $result['failed'] ? self::FAILURE : self::SUCCESS;
     }

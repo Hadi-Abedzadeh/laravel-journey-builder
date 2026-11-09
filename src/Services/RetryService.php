@@ -18,8 +18,8 @@ final class RetryService
             if ($run->locked_until && $run->locked_until > now('UTC')->format('Y-m-d H:i:s')) return 'worker_lease_active';
             $flow = $db->table('jb_flows')->where('id',$run->flow_id)->lockForUpdate()->first();
             if (!$flow || $flow->status!=='active') return 'flow_not_active';
-            if ((int)$flow->revision !== (int)$run->revision) return 'revision_mismatch';
-            $graph=json_decode($flow->graph_json,true);
+            try { $graph = app(FlowRevisionService::class)->graphForRun($db, $flow, $run); }
+            catch (\RuntimeException $e) { return 'revision_snapshot_missing'; }
             $node=collect($graph['nodes']??[])->firstWhere('id', $run->node_id);
             if (!$node) return 'missing_node';
             $kind=$node['type']; $log=null;

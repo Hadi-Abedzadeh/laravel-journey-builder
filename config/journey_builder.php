@@ -13,6 +13,10 @@ return [
         'purge_on_exit' => (bool) env('JOURNEY_BUILDER_PURGE_ON_EXIT', false),
         'enrollment_hash_key' => env('JOURNEY_BUILDER_ENROLLMENT_HASH_KEY', ''),
     ],
+    'monitoring' => [
+        // Heartbeat rows can grow quickly (three commands per minute).
+        'command_log_days' => (int) env('JOURNEY_BUILDER_COMMAND_LOG_DAYS', 14),
+    ],
     'max_delivery_attempts' => (int) env('JOURNEY_BUILDER_MAX_DELIVERY_ATTEMPTS', 3),
     'timezone' => env('JOURNEY_BUILDER_TIMEZONE', 'Asia/Tehran'),
     'member_timezone' => env('JOURNEY_BUILDER_MEMBER_TIMEZONE', config('app.timezone', 'UTC')),

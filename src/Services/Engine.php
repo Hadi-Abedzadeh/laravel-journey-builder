@@ -150,8 +150,8 @@ final class Engine
         $db=$this->db();
         $flow = $db->table('jb_flows')->where('id',$run->flow_id)->first();
         if (!$flow || $flow->status!=='active') return; // Paused while claimed: leave run unmodified.
-        if ((int)$flow->revision !== (int)$run->revision) throw new \RuntimeException('Run definition revision mismatch');
-        $graph=json_decode($flow->graph_json,true);
+        // Paused journeys may be edited: older runs continue on an immutable graph revision.
+        $graph=app(FlowRevisionService::class)->graphForRun($db,$flow,$run);
         $nodes=collect($graph['nodes'])->keyBy('id');
         $edges=[];
         foreach ($graph['edges'] as $edge) $edges[$edge['source']][$edge['port']]=$edge['target'];

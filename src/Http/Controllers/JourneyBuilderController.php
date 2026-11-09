@@ -7,6 +7,8 @@ use OpenJourney\LaravelJourneyBuilder\Services\ApiGateway;
 use OpenJourney\LaravelJourneyBuilder\Services\TypedWhere;
 use OpenJourney\LaravelJourneyBuilder\Services\RetryService;
 use OpenJourney\LaravelJourneyBuilder\Services\ManualEnrollment;
+use OpenJourney\LaravelJourneyBuilder\Services\FlowRevisionService;
+use OpenJourney\LaravelJourneyBuilder\Services\AdminAudit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,40 +23,19 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         return DB::connection(config('journey_builder.connection', 'sqlsrv'));
     }
 
-    /**
-     * Pausing stops new processing but is not equivalent to a fresh draft.
-     * Never rewrite the graph after a member has entered, completed or logged an action.
-     */
+    /** Paused flows are editable even with previous runs: revisions protect in-flight users. */
     private function isEditableFlow(\Illuminate\Database\ConnectionInterface $db, object $flow): bool
     {
-        if (!in_array($flow->status, ['draft', 'paused'], true)) {
-            return false;
-        }
-
-        // Preserve historical node IDs / flow revisions, including compacted runs.
-        foreach ([
-            'jb_runs', 'jb_run_hashes', 'jb_flow_totals', 'jb_node_totals',
-            'jb_step_logs', 'jb_sms_logs', 'jb_api_logs', 'jb_retry_audit',
-        ] as $table) {
-            // Earlier standalone installations may lack the newer retry audit table.
-            // Absence of this optional *audit-only* table must not break the editor.
-            // The additive migration shipped with this hotfix installs it for Retry.
-            if ($table === 'jb_retry_audit' && !Schema::connection(config('journey_builder.connection', 'sqlsrv'))->hasTable($table)) {
-                continue;
-            }
-            if ($db->table($table)->where('flow_id', $flow->id)->exists()) {
-                return false;
-            }
-        }
-
-        return true;
+        return in_array($flow->status, ['draft', 'paused'], true)
+            && ($flow->deleted_at ?? null) === null;
     }
 
     // Dedicated list page; never mixes the management table with the drag/drop canvas.
     public function index()
     {
         $db=$this->db();
-        $flows=$db->table('jb_flows')->orderByDesc('id')->paginate(30);
+        $trash=request()->boolean('trash');
+        $flows=($trash ? $db->table('jb_flows')->whereNotNull('deleted_at') : $db->table('jb_flows')->whereNull('deleted_at'))->orderByDesc('id')->paginate(30)->withQueryString();
         $pageIds=$flows->getCollection()->pluck('id')->all();
         $stats=[];
         if ($pageIds) {
@@ -65,7 +46,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
                 $stats[$summary->flow_id]['runs']['exited'] = (int)($stats[$summary->flow_id]['runs']['exited']??0) + (int)$summary->pruned_runs;
             }
         }
-        return response()->view('journey-builder::index',compact('flows','stats'))->header('Cache-Control','no-store, private');
+        return response()->view('journey-builder::index',compact('flows','stats','trash'))->header('Cache-Control','no-store, private');
     }
 
     public function builder(int $id)
@@ -106,8 +87,91 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $sms=$db->table('jb_sms_logs')->where('flow_id',$id)->orderByDesc('id')->limit(30)->get();
         $api=$db->table('jb_api_logs')->where('flow_id',$id)->orderByDesc('id')->limit(30)->get();
         $nodes=collect(json_decode($flow->graph_json,true)['nodes']??[])->keyBy('id');
-        return response()->view('journey-builder::details',compact('flow','runs','runCounts','smsCounts','apiCounts','currentNodes','arrivals','logs','sms','api','nodes'))
+        // A run on an old revision can reference an API/SMS node removed from the new canvas.
+        // Its Retry button must still recognize the old external action type.
+        $runNodeTypes=[];
+        $previousRevisions=$runs->getCollection()->pluck('revision')->unique()->reject(fn($rev)=>(int)$rev===(int)$flow->revision);
+        foreach ($previousRevisions as $revision) {
+            $oldGraph=$db->table('jb_flow_revisions')->where('flow_id',$id)->where('revision',$revision)->value('graph_json');
+            foreach ((json_decode($oldGraph??'{}',true)['nodes']??[]) as $node) {
+                $runNodeTypes[(int)$revision][$node['id']]=$node['type'];
+            }
+        }
+        return response()->view('journey-builder::details',compact('flow','runs','runCounts','smsCounts','apiCounts','currentNodes','arrivals','logs','sms','api','nodes','runNodeTypes'))
             ->header('Cache-Control','no-store, private');
+    }
+
+    /** Operational monitoring: command heartbeats are recorded only when they really execute. */
+    public function monitoring(Request $request)
+    {
+        $filters=$request->validate([
+            'command'=>'nullable|in:enroll,tick,sms-dispatch',
+            'status'=>'nullable|in:running,success,partial,failed',
+            'flow'=>'nullable|integer|min:1',
+        ]);
+        $db=$this->db();
+        $schema=Schema::connection(config('journey_builder.connection','sqlsrv'));
+        if (!$schema->hasTable('jb_command_runs') || !$schema->hasTable('jb_admin_events')) {
+            return response()->view('journey-builder::monitoring', ['needsMigration'=>true])
+                ->header('Cache-Control','no-store, private');
+        }
+        $q=$db->table('jb_command_runs');
+        if (!empty($filters['command'])) TypedWhere::eq($q,'command_name',$filters['command'],32);
+        if (!empty($filters['status'])) TypedWhere::eq($q,'status',$filters['status'],16);
+        $commandRows=$q->orderByDesc('id')->paginate(30)->withQueryString();
+        $last=[];
+        foreach (['enroll','tick','sms-dispatch'] as $command) {
+            $last[$command]=$db->table('jb_command_runs')->where('command_name',$command)->orderByDesc('id')->first();
+        }
+        $due=TypedWhere::oneOf(TypedWhere::eq($db->table('jb_runs as r')
+            ->join('jb_flows as f','f.id','=','r.flow_id'), 'f.status','active',20),
+            'r.state',['ready','waiting'],20)->whereNull('f.deleted_at')
+            ->where('r.next_run_at','<=',now('UTC'))->count();
+        $failedRuns=TypedWhere::eq($db->table('jb_runs'),'state','failed',20)->count();
+        $pendingSms=TypedWhere::eq($db->table('jb_sms_logs'),'status','pending',20)->count();
+        $unknownSms=TypedWhere::eq($db->table('jb_sms_logs'),'status','unknown',20)->count();
+        $activeFlows=TypedWhere::eq($db->table('jb_flows'),'status','active',20)->whereNull('deleted_at')->count();
+        $auditQuery=$db->table('jb_admin_events');
+        if (!empty($filters['flow'])) $auditQuery->where('flow_id',$filters['flow']);
+        $audit=$auditQuery->orderByDesc('id')->limit(60)->get();
+        $needsMigration=false;
+        return response()->view('journey-builder::monitoring',compact('needsMigration','commandRows','last','due','failedRuns','pendingSms','unknownSms','activeFlows','audit','filters'))
+            ->header('Cache-Control','no-store, private');
+    }
+
+    /** Reversible soft-delete: never drop data or interrupt a call already in flight. */
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $v=$request->validate(['confirmation'=>'required|string|in:DELETE']);
+        $db=$this->db();
+        $db->transaction(function () use ($db,$id) {
+            $flow=$db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
+            abort_unless($flow && $flow->deleted_at === null,404);
+            if (!in_array($flow->status,['draft','paused'],true)) {
+                throw ValidationException::withMessages(['confirmation'=>'برای حذف ابتدا جرنی را غیرفعال کنید.']);
+            }
+            $db->table('jb_flows')->where('id',$id)->update([
+                'deleted_at'=>now('UTC'), 'deleted_from_status'=>$flow->status,
+                'status'=>'deleted','updated_at'=>now('UTC'),
+            ]);
+            app(AdminAudit::class)->record('flow.deleted',$id,'Soft-deleted; executions and delivery logs retained');
+        });
+        return response()->json(['ok'=>true]);
+    }
+
+    public function restore(int $id): JsonResponse
+    {
+        $db=$this->db();
+        $db->transaction(function () use ($db,$id) {
+            $flow=$db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
+            abort_unless($flow && $flow->deleted_at !== null,404);
+            $restored = $flow->deleted_from_status === 'draft' ? 'draft' : 'paused';
+            $db->table('jb_flows')->where('id',$id)->update([
+                'status'=>$restored, 'deleted_at'=>null, 'deleted_from_status'=>null, 'updated_at'=>now('UTC'),
+            ]);
+            app(AdminAudit::class)->record('flow.restored',$id,'Restored without reactivating');
+        });
+        return response()->json(['ok'=>true]);
     }
 
     public function smsIndex(Request $request)
@@ -134,6 +198,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             'graph_json'=>json_encode(Definition::blank(),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
             'created_at'=>now('UTC'),'updated_at'=>now('UTC'),
         ]);
+        app(AdminAudit::class)->record('flow.created',$id);
         return response()->json(['id'=>$id,'url'=>route('jb.builder',$id)],201);
     }
 
@@ -146,8 +211,9 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             $flow=$db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
             abort_unless($flow,404);
             if (!$this->isEditableFlow($db, $flow)) {
-                throw ValidationException::withMessages(['graph'=>'ویرایش فقط برای جرنی پیش‌نویس یا متوقف‌شده بدون سابقه اجرا مجاز است. برای جرنی دارای سابقه اجرا، نسخه جدید بسازید.']);
+                throw ValidationException::withMessages(['graph'=>'برای ویرایش باید ابتدا جرنی را غیرفعال کنید.']);
             }
+            app(FlowRevisionService::class)->snapshotIfUsed($db, $flow);
             $db->table('jb_flows')->where('id',$id)->update([
                 'title'=>$v['title'], 'graph_json'=>json_encode($graph,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
                 'revision'=>$flow->revision+1, 'updated_at'=>now('UTC'),
@@ -164,6 +230,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             $oldTokens = $db->table('jb_api_credentials')->where('flow_id', $id);
             if ($secretIds) $oldTokens->whereNotIn('node_id', $secretIds);
             $oldTokens->delete();
+            app(AdminAudit::class)->record('flow.updated', $id, 'Graph revision '.($flow->revision+1));
         });
         return response()->json(['ok'=>true]);
     }
@@ -184,11 +251,16 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             $flow = $db->table('jb_flows')->where('id', $id)->lockForUpdate()->first();
             abort_unless($flow, 404);
             if (!$this->isEditableFlow($db, $flow)) {
-                throw ValidationException::withMessages(['token'=>'توکن تنها برای جرنی پیش‌نویس یا متوقف‌شده بدون سابقه اجرا قابل تغییر است.']);
+                throw ValidationException::withMessages(['token'=>'برای تغییر توکن، ابتدا جرنی را غیرفعال کنید.']);
             }
             $nodes = json_decode($flow->graph_json, true, 512, JSON_THROW_ON_ERROR)['nodes'] ?? [];
             $node = collect($nodes)->first(fn($n) => $n['id'] === $nodeId && $n['type'] === 'api');
             abort_unless($node, 404);
+            $previousVersionUsed = app(FlowRevisionService::class)->snapshotIfUsed($db,$flow);
+            if ($previousVersionUsed) {
+                // Future users use the new token; older runs retain credentials of their own revision.
+                $db->table('jb_flows')->where('id',$id)->update(['revision'=>$flow->revision+1,'updated_at'=>now('UTC')]);
+            }
             $store = TypedWhere::eq($db->table('jb_api_credentials')->where('flow_id', $id), 'node_id', $nodeId, 80);
             if ($clear) {
                 $store->delete();
@@ -207,6 +279,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
                 'created_at'=>now('UTC'),'updated_at'=>now('UTC'),
             ]);
         });
+        app(AdminAudit::class)->record($clear?'api.token_cleared':'api.token_changed',$id,'node='.$nodeId);
         return response()->json(['ok'=>true,'configured'=>!$clear])->header('Cache-Control','no-store, private');
     }
 
@@ -225,6 +298,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         if ($result !== 'retried') {
             return response()->json(['ok'=>false,'reason'=>$result],409)->header('Cache-Control','no-store');
         }
+        app(AdminAudit::class)->record('run.retry',$id,'run='.$runId);
         return response()->json(['ok'=>true,'status'=>'ready'])->header('Cache-Control','no-store');
     }
 
@@ -241,6 +315,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             abort_unless($flow,404);
             $db->table('jb_flows')->where('id',$id)->update(['enrollment_mode'=>$v['mode'],'updated_at'=>now('UTC')]);
         });
+        app(AdminAudit::class)->record('flow.enrollment_mode',$id,'mode='.$v['mode']);
         return response()->json(['ok'=>true,'mode'=>$v['mode']])->header('Cache-Control','no-store, private');
     }
 
@@ -256,6 +331,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             $reason = $result['already_enrolled'] ? 'این کاربر قبلاً وارد همین جرنی شده است.' : 'آخرین مقدار Attribute کاربر با شرط ورود جرنی مطابقت ندارد.';
             throw ValidationException::withMessages(['user_id'=>$reason]);
         }
+        app(AdminAudit::class)->record('run.manual_enrolled',$id,'run='.$result['run_id']);
         return response()->json(['ok'=>true,'run_id'=>$result['run_id']])->header('Cache-Control','no-store, private');
     }
 
@@ -265,7 +341,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $db=$this->db();
         $db->transaction(function () use ($db,$id,$v) {
             $flow=$db->table('jb_flows')->where('id',$id)->lockForUpdate()->first();
-            abort_unless($flow,404);
+            abort_unless($flow && !$flow->deleted_at,404);
             if ($flow->status==='draft' && $v['status']==='paused') {
                 throw ValidationException::withMessages(['status'=>'جرنی پیش‌نویس قابل توقف نیست.']);
             }
@@ -300,12 +376,18 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
                         throw ValidationException::withMessages(['status'=>'توکن گره API با شناسه '.$node['id'].' تنظیم نشده است.']);
                     }
                 }
-                if ($db->table('jb_runs')->where('flow_id',$id)->where('revision','!=',$flow->revision)->exists()) {
-                    throw ValidationException::withMessages(['status'=>'نسخه تعریف جرنی با اجراهای قبلی مطابقت ندارد.']);
+                // Every earlier running revision must have an immutable snapshot.
+                $oldRevisions=$db->table('jb_runs')->where('flow_id',$id)
+                    ->where('revision','!=',$flow->revision)->distinct()->pluck('revision');
+                foreach ($oldRevisions as $rev) {
+                    if (!$db->table('jb_flow_revisions')->where('flow_id',$id)->where('revision',$rev)->exists()) {
+                        throw ValidationException::withMessages(['status'=>'نسخه قدیمی جرنی برای Runهای موجود ثبت نشده؛ فعال‌سازی ایمن نیست.']);
+                    }
                 }
             }
             $db->table('jb_flows')->where('id',$id)->update(['status'=>$v['status'],'updated_at'=>now('UTC')]);
         });
+        app(AdminAudit::class)->record('flow.status',$id,'status='.$v['status']);
         return response()->json(['ok'=>true,'status'=>$v['status']]);
     }
 

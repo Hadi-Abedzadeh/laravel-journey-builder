@@ -27,7 +27,7 @@ final class PausedEditingTest extends TestCase
         $app['config']->set('journey_builder.auto_schedule', false);
     }
 
-    public function test_only_unused_draft_or_paused_flow_can_be_edited(): void
+    public function test_draft_and_paused_can_be_edited_even_with_previous_runs(): void
     {
         (require __DIR__.'/../database/migrations/2026_11_07_200000_create_journey_builder_package_tables.php')->up();
         (require __DIR__.'/../database/migrations/2026_11_08_100000_add_journey_builder_retention_tables.php')->up();
@@ -51,12 +51,12 @@ final class PausedEditingTest extends TestCase
             'flow_id'=>$id,'user_id'=>'test','node_id'=>'start','state'=>'ready',
             'revision'=>1,'next_run_at'=>now('UTC'),'created_at'=>now('UTC'),'updated_at'=>now('UTC'),
         ]);
-        $this->assertFalse($method->invoke($controller, $db, $flow()));
+        $this->assertTrue($method->invoke($controller, $db, $flow()));
         $db->table('jb_runs')->where('flow_id',$id)->delete();
         $db->table('jb_flow_totals')->insert([
             'flow_id'=>$id, 'pruned_runs'=>1, 'updated_at'=>now('UTC'),
         ]);
-        $this->assertFalse($method->invoke($controller, $db, $flow()));
+        $this->assertTrue($method->invoke($controller, $db, $flow()));
     }
 
     public function test_absent_retry_audit_does_not_break_new_or_paused_unused_flow(): void
