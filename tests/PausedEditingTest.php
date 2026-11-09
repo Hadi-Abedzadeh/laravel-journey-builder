@@ -2,6 +2,7 @@
 namespace OpenJourney\LaravelJourneyBuilder\Tests;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use OpenJourney\LaravelJourneyBuilder\Http\Controllers\JourneyBuilderController;
 use OpenJourney\LaravelJourneyBuilder\JourneyBuilderServiceProvider;
 use OpenJourney\LaravelJourneyBuilder\Services\Definition;
@@ -56,5 +57,25 @@ final class PausedEditingTest extends TestCase
             'flow_id'=>$id, 'pruned_runs'=>1, 'updated_at'=>now('UTC'),
         ]);
         $this->assertFalse($method->invoke($controller, $db, $flow()));
+    }
+
+    public function test_absent_retry_audit_does_not_break_new_or_paused_unused_flow(): void
+    {
+        (require __DIR__.'/../database/migrations/2026_11_07_200000_create_journey_builder_package_tables.php')->up();
+        (require __DIR__.'/../database/migrations/2026_11_08_100000_add_journey_builder_retention_tables.php')->up();
+        $db = DB::connection('sqlite');
+        Schema::connection('sqlite')->drop('jb_retry_audit');
+        $flowId = $db->table('jb_flows')->insertGetId([
+            'code' => 'jn_retry_audit_missing', 'title' => 'untouched', 'status' => 'paused',
+            'revision' => 1, 'graph_json' => json_encode(Definition::blank()),
+            'created_at' => now('UTC'), 'updated_at' => now('UTC'),
+        ]);
+        $controller = new JourneyBuilderController();
+        $method = new ReflectionMethod(JourneyBuilderController::class, 'isEditableFlow');
+        $flow = $db->table('jb_flows')->where('id', $flowId)->first();
+        $this->assertTrue($method->invoke($controller, $db, $flow));
+        (require __DIR__.'/../database/migrations/2026_11_09_121000_ensure_jb_retry_audit_table.php')->up();
+        $this->assertTrue(Schema::connection('sqlite')->hasTable('jb_retry_audit'));
+        $this->assertTrue($method->invoke($controller, $db, $flow));
     }
 }

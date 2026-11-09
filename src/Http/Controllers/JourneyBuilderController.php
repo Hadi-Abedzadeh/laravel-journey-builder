@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class JourneyBuilderController extends \Illuminate\Routing\Controller
@@ -35,6 +36,12 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             'jb_runs', 'jb_run_hashes', 'jb_flow_totals', 'jb_node_totals',
             'jb_step_logs', 'jb_sms_logs', 'jb_api_logs', 'jb_retry_audit',
         ] as $table) {
+            // Earlier standalone installations may lack the newer retry audit table.
+            // Absence of this optional *audit-only* table must not break the editor.
+            // The additive migration shipped with this hotfix installs it for Retry.
+            if ($table === 'jb_retry_audit' && !Schema::connection(config('journey_builder.connection', 'sqlsrv'))->hasTable($table)) {
+                continue;
+            }
             if ($db->table($table)->where('flow_id', $flow->id)->exists()) {
                 return false;
             }

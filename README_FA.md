@@ -1,62 +1,58 @@
-# اصلاح ویرایش جرنی غیرفعال — v0.3.4-beta.2 (پیشنهادی)
+# Journey Builder — hotfix پیشنهادی v0.3.4-beta.3
 
-## علت خطا
-در نسخه 3.4.1، دکمه ذخیره و تنظیمات JavaScript فقط برای `draft` فعال بودند؛ وقتی جرنی غیرفعال می‌شد وضعیت آن `paused` بود، نه `draft`. کنترلر ذخیره و تغییر توکن هم فقط `draft` را می‌پذیرفتند.
+## رفع‌شده
+1. Migration افزایشی مستقل برای `dbo.jb_retry_audit` با دو ایندکس؛ بدون حذف یا تغییر جدول‌های دیگر.
+2. کنترلر پچ ویرایش: برای `draft`/`paused` بدون سابقه، امکان ویرایش دارد؛ نبود موقت `jb_retry_audit` باعث خطای SQL نمی‌شود.
+3. صفحه Blade هماهنگ با `$canEdit` و ظاهر حرفه‌ای (CSS حرفه‌ای باید از قبل منتشر شده باشد).
+4. تست جدید برای غایب بودن جدول audit؛ اجرای PHPUnit در این محیط انجام نشده.
 
-## رفتار جدید
-- `draft` یا `paused` **بدون هیچ سابقه اجرا**: ویرایش عنوان، گراف و توکن اختصاصی API مجاز است.
-- `active` و هر جرنی دارای سابقه اجرا، حتی اگر `paused` باشد: ویرایش گراف ممنوع است. این وضعیت عمدی است، چون برخی Runها و گزارش‌های قدیمی هنوز به گره‌های قبلی وابسته‌اند.
-- هنگام ذخیره جرنی بدون سابقه، Cursor ورود کاربران صفر می‌شود تا تغییر شرط شروع باعث جا افتادن کاربران قبلی نشود.
-- حذف دستی Run، Log، Hash یا تغییر مستقیم `status` در SQL توصیه نمی‌شود؛ تاریخچه و سازگاری نسخه‌ها به هم می‌خورد.
+## مهم: پیش از نصب
+- این بسته «پچ» است، نه سورس کامل. در ریشه **Repository پکیج** استخراج کنید، نه در `vendor` پروژه مصرف‌کننده.
+- اگر پچ v0.3.4-beta.2 را قبلاً در GitHub اعمال کرده‌اید، فقط Migration و کنترلر را با احتیاط ادغام کنید.
+- اگر جرنی قبلاً Run/Log/Hash/آمار آرشیوشده دارد، ویرایش گراف آن عمداً قفل می‌ماند. برای تغییر مسیر، باید نسخه تازه ساخت.
+- هیچ Migration قدیمی را rollback نکنید؛ جدولی را حذف نکنید.
 
-## فایل‌های پچ
-سه فایل را با حفظ مسیر در **ریشه مخزن پکیج** جایگزین کنید (نه `D:\datasyncer\vendor`):
+## انتشار با Tag جدید
+در ریشه مخزن پکیج:
 
-- `src/Http/Controllers/JourneyBuilderController.php`
-- `resources/views/dashboard.blade.php`
-- `tests/PausedEditingTest.php`
+```powershell
+git status
+git add src/Http/Controllers/JourneyBuilderController.php resources/views/dashboard.blade.php database/migrations/2026_11_09_121000_ensure_jb_retry_audit_table.php tests/PausedEditingTest.php
+git commit -m "Fix missing retry audit table and paused flow editor"
+git push origin main
+git tag -a v0.3.4-beta.3 -m "Fix SQL Server audit migration and paused editor"
+git push origin v0.3.4-beta.3
+```
 
-فایل Blade از پچ تأییدشده ظاهر حرفه‌ای v3.4.1 گرفته شده؛ CSS حرفه‌ای دست‌نخورده باقی می‌ماند.
+ابتدا بررسی کنید که Tag جدید آزاد باشد؛ Tag قدیمی را بازنویسی نکنید.
 
-## بررسی قبل از نصب
-برای جرنی شماره 4 در SQL Server:
+## نصب در datasyncer
+بعد از شناسایی Tag در Packagist:
+
+```powershell
+cd D:\datasyncer
+composer clear-cache
+composer require "hadiabedzadeh/laravel-journey-builder:0.3.4-beta.3"
+php artisan migrate --database=sqlsrv --path=vendor/hadiabedzadeh/laravel-journey-builder/database/migrations/2026_11_09_121000_ensure_jb_retry_audit_table.php
+php artisan optimize:clear
+```
+
+این پچ فایل CSS یا JS را تغییر نمی‌دهد و Asset Publish نیاز ندارد. در صورتی که Viewها در پروژه میزبان override شده‌اند، آن‌ها را بررسی کنید.
+
+## تشخیص باقی ماندن قفل ویرایش
 
 ```sql
 SELECT f.id, f.title, f.status,
   (SELECT COUNT_BIG(*) FROM dbo.jb_runs WHERE flow_id=f.id) AS runs,
-  (SELECT COUNT_BIG(*) FROM dbo.jb_run_hashes WHERE flow_id=f.id) AS hashes,
   (SELECT COUNT_BIG(*) FROM dbo.jb_step_logs WHERE flow_id=f.id) AS steps,
-  (SELECT COUNT_BIG(*) FROM dbo.jb_sms_logs WHERE flow_id=f.id) AS sms_logs,
-  (SELECT COUNT_BIG(*) FROM dbo.jb_api_logs WHERE flow_id=f.id) AS api_logs,
-  (SELECT COUNT_BIG(*) FROM dbo.jb_flow_totals WHERE flow_id=f.id) AS aggregate_rows
-FROM dbo.jb_flows f WHERE f.id=4;
+  (SELECT COUNT_BIG(*) FROM dbo.jb_sms_logs WHERE flow_id=f.id) AS sms,
+  (SELECT COUNT_BIG(*) FROM dbo.jb_api_logs WHERE flow_id=f.id) AS api,
+  (SELECT COUNT_BIG(*) FROM dbo.jb_retry_audit WHERE flow_id=f.id) AS retries,
+  (SELECT COUNT_BIG(*) FROM dbo.jb_run_hashes WHERE flow_id=f.id) AS hashes,
+  (SELECT COUNT_BIG(*) FROM dbo.jb_flow_totals WHERE flow_id=f.id) AS totals,
+  (SELECT COUNT_BIG(*) FROM dbo.jb_node_totals WHERE flow_id=f.id) AS node_totals
+FROM dbo.jb_flows f
+WHERE f.id IN (4,5);
 ```
 
-اگر status=paused و تمام سابقه‌ها صفر باشد، ویرایش پس از نصب پچ آزاد می‌شود.
-
-## انتشار به GitHub و Packagist
-در پوشه مخزن پکیج:
-
-```powershell
-git status
-git add src/Http/Controllers/JourneyBuilderController.php resources/views/dashboard.blade.php tests/PausedEditingTest.php
-git commit -m "Allow editing paused journeys without execution history"
-git push origin main
-git tag -a v0.3.4-beta.2 -m "Paused journey editing fix"
-git push origin v0.3.4-beta.2
-```
-
-اگر Tag ذکرشده قبلاً وجود دارد، به‌جایش نسخه جدیدتر و آزاد انتخاب کنید و **Tag قبلی را جابه‌جا نکنید**.
-
-در Packagist در صورت نیاز Update بزنید و در پروژه مصرف‌کننده:
-
-```powershell
-cd D:\datasyncer
-composer require "hadiabedzadeh/laravel-journey-builder:0.3.4-beta.2"
-php artisan optimize:clear
-```
-
-این پچ فقط Blade و کنترلر را تغییر می‌دهد، Migration یا Asset جدید ندارد. اگر View را Publish یا Override کرده‌اید، نسخه محلی را هم با پچ تطبیق دهید. `vendor:publish --tag=journey-builder-assets` برای این پچ لازم نیست.
-
-### بررسی تست
-`php -l` روی فایل‌های PHP اجرا شده؛ اجرای واقعی PHPUnit/SQL Server در این محیط انجام نشده است. دستور `vendor/bin/phpunit` را در Repository پکیج اجرا کنید.
+این فایل‌ها بدون اتصال مستقیم به SQL Server بررسی نحوی شده‌اند. برای Production ابتدا روی Staging و دیتابیس پشتیبان تست کنید.
