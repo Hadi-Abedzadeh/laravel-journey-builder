@@ -13,7 +13,18 @@
 </aside><main class="workspace"><header class="editor-toolbar"><h2 id="flow-title">{{ $flow->title }}</h2><span class="badge {{ $flow->status }}">{{ ['active'=>'فعال','paused'=>'غیرفعال','draft'=>'پیش‌نویس'][$flow->status]??$flow->status }}</span><button class="btn primary" id="save" {{ !$canEdit?'disabled':'' }}>ذخیره تغییرات</button><a class="btn" href="{{ route('jb.show',$flow->id) }}">گزارش جرنی</a><button class="btn" id="refresh">به‌روزرسانی</button></header>
 <div class="viewport" id="viewport"><div class="board" id="board"><svg id="wires" class="wires" role="img" aria-label="اتصال مراحل"></svg><div id="nodes"></div></div></div></main>
 <aside class="side"><h3>تنظیمات جرنی</h3>@if($canEdit)<div class="field"><label for="edit-title">نام نمایشی</label><input id="edit-title" value="{{ $flow->title }}" maxlength="200"></div>@else<div class="muted-box">جرنی فعال یا حذف‌شده قابل ویرایش نیست. ابتدا جرنی را غیرفعال کنید. پس از ویرایش، کاربران قدیمی با نسخه قبلی ادامه می‌دهند.</div>@endif
-<hr style="border:0;border-top:1px solid #e3e9f3;margin:20px 0"><h3>تنظیمات مرحله انتخاب‌شده</h3><div class="inspector" id="inspector"><p class="help">یک گره را انتخاب کنید.</p></div><div class="muted-box" style="font-size:11px;margin-top:18px">ذخیره پیش‌نویس با مسیرهای ناقص ممکن است؛ فعال‌سازی فقط وقتی همه خروجی‌ها وصل و تنظیمات معتبر باشند انجام می‌شود.</div></aside></div><div class="toast" id="toast" role="status"></div>
+<hr style="border:0;border-top:1px solid #e3e9f3;margin:20px 0"><h3>تنظیمات مرحله انتخاب‌شده</h3><div class="inspector" id="inspector"><p class="help">یک گره را انتخاب کنید.</p></div><div class="muted-box" style="font-size:11px;margin-top:18px">ذخیره پیش‌نویس با مسیرهای ناقص ممکن است؛ فعال‌سازی فقط وقتی همه خروجی‌ها وصل و تنظیمات معتبر باشند انجام می‌شود.</div></aside></div><div class="jb-preview-backdrop" id="jb-preview-backdrop" hidden>
+  <section class="jb-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="jb-preview-heading" aria-describedby="jb-preview-description" dir="rtl" tabindex="-1">
+    <header class="jb-preview-dialog-head">
+      <div><div class="jb-preview-eyebrow">نمایش آزمایشی محتوا</div><h2 id="jb-preview-heading">پیش‌نمایش پیام</h2></div>
+      <button type="button" class="jb-preview-close" id="jb-preview-close" aria-label="بستن پیش‌نمایش">×</button>
+    </header>
+    <p class="jb-preview-description" id="jb-preview-description"></p>
+    <div class="jb-preview-content" id="jb-preview-content"></div>
+    <footer class="jb-preview-dialog-foot"><span>محتوا فقط در مرورگر شما نمایش داده می‌شود.</span><button type="button" class="btn" id="jb-preview-done">بستن</button></footer>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
 @php($ui=['id'=>$flow->id,'readonly'=>!$canEdit,'graph'=>json_decode($flow->graph_json,true),'saveUrl'=>route('jb.save',$flow->id),'secretNodeIds'=>$secretNodeIds,'tokenUrlPattern'=>route('jb.token',['id'=>$flow->id,'nodeId'=>'__NODE__']),'smsProviders'=>$smsProviders,'emailProviders'=>$emailProviders,'pushProviders'=>$pushProviders,'smsProvidersUrl'=>route('jb.sms.providers'),'emailProvidersUrl'=>route('jb.channels.index','email'),'pushProvidersUrl'=>route('jb.channels.index','webpush')])
 <script>window.JB_UI={{ \Illuminate\Support\Js::from($ui) }};</script><script src="{{ asset('vendor/journey-builder/builder.js') }}" defer></script>@include('journey-builder::partials.footer')
 </body></html>

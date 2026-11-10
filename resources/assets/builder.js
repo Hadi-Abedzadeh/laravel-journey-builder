@@ -5,7 +5,7 @@ const labels={trigger:'ورود کاربران',condition:'شرط رویداد',
 const icons={trigger:'▶',condition:'◇',attribute:'◈',split:'⑂',slot:'◷',delay:'◴',wait_event:'⌛',sms:'✉',email:'✉',webpush:'◉',api:'↗',exit:'■'};
 const colors={trigger:'#3182ee',condition:'#e0a434',attribute:'#e7a238',split:'#9d6ddd',slot:'#ed9563',delay:'#eb9463',wait_event:'#cf6d75',sms:'#14a985',email:'#7b61e8',webpush:'#0e9fbd',api:'#3677d6',exit:'#8795a8'};
 const portLabels={next:'بعدی',yes:'بله',no:'خیر',a:'مسیر A',b:'مسیر B',event:'رویداد',timeout:'زمان تمام شد',success:'موفق',failure:'ناموفق'};
-const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone',receptor_sign:''},email:{provider_id:0,recipient_attribute:'email',recipient_sign:'',subject:'',body:'',format:'text'},webpush:{provider_id:0,title:'',body:'',url:'',ttl:24,button_title:'',button_url:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
+const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone'},email:{provider_id:0,recipient_attribute:'email',subject:'',body:'',format:'text'},webpush:{provider_id:0,title:'',body:'',url:'',ttl:24,button_title:'',button_url:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
 const days=['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
 const opNames={exists:'وجود داشته باشد',not_exists:'وجود نداشته باشد',equals:'برابر باشد',not_equals:'برابر نباشد',starts_with:'با مقدار شروع شود',not_starts_with:'با مقدار شروع نشود'};
 const $=id=>document.getElementById(id);
@@ -24,7 +24,7 @@ function field(label,id,value,type='text',extra=''){return `<div class="field"><
 function selectField(label,id,value,choices){return `<div class="field"><span>${label}</span><select id="${id}">${choices.map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`}
 function textField(label,id,value,rows=4){return `<div class="field"><span>${label}</span><textarea id="${id}" rows="${rows}">${esc(value)}</textarea></div>`}
 const ops=Object.entries(opNames);const eventScope=[['ever','تمام سوابق موجود'],['after_enroll','از زمان ورود به جرنی']];
-function select(id){selectedId=id;redraw();const n=graph.nodes.find(n=>n.id===id),box=$('inspector');if(!n){box.innerHTML='<p class="help">گرهی انتخاب نشده است.</p>';return}const c=n.config||{};let html=`<b>${labels[n.type]}</b>${field('شناسه فنی گره','node-id',n.id,'text','readonly')}`;
+function select(id){selectedId=id;redraw();const n=graph.nodes.find(n=>n.id===id),box=$('inspector');if(!n){box.innerHTML='<p class="help">گرهی انتخاب نشده است.</p>';return}const c=n.config||{};let html=`<b>${labels[n.type]}</b>`;
 if(n.type==='trigger')html+=selectField('بخش دیتابیس','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('منبع sign (اختیاری)','cfg-sign',c.sign||'')+field('کلید key','cfg-key',c.key||'')+selectField('فیلتر ورود','cfg-operator',c.operator||'exists',ops)+field('مقدار (در صورت نیاز)','cfg-value',c.value||'')+'<div class="help">هر جرنی مستقل ردیف‌های این منبع را اسکن می‌کند. کلید را پیش از فعالسازی مشخص کنید.</div>';
 if(n.type==='condition')html+=field('نام رویداد (name)','cfg-event',c.event||'')+field('sign اختیاری','cfg-sign',c.sign||'')+selectField('محدوده زمانی','cfg-scope',c.scope||'ever',eventScope);
 if(n.type==='attribute')html+=field('key','cfg-key',c.key||'')+field('sign اختیاری','cfg-sign',c.sign||'')+selectField('عملگر','cfg-operator',c.operator||'exists',ops)+field('مقدار','cfg-value',c.value||'');
@@ -38,7 +38,6 @@ if(n.type==='sms'){
  html+='<div id="sms-managed-settings">'
    +selectField('پنل پیامک','cfg-provider_id',String(c.provider_id||0),[['0','پنل پیش‌فرض سیستم'],...(ui.smsProviders||[]).map(p=>[String(p.id),p.name])])
    +field('Attribute شماره گیرنده (receptor)','cfg-receptor_attribute',c.receptor_attribute||'phone','text','dir="ltr" maxlength="50"')
-   +field('فیلتر sign شماره گیرنده (اختیاری)','cfg-receptor_sign',c.receptor_sign||'','text','dir="ltr" maxlength="30"')
    +textField('متن پیامک (message)','cfg-message',c.message||'',6)
    +'<div class="help">متغیرها: {{firstName}}، {{lastName}}، {{phone}}، {{userId}} یا نام هر Attribute انگلیسی ذخیره‌شده. در زمان ارسال از دیتابیس خوانده می‌شوند. شماره گیرنده از Attribute مشخص‌شده در همین گره خوانده می‌شود؛ تنظیمات پنل فقط sender و API-KEY را نگه می‌دارد.</div>'
    +'<div class="help"><a href="'+esc(ui.smsProvidersUrl||'#')+'" target="_blank" rel="noopener noreferrer">مدیریت پنل‌ها و معرفی پارامترهای message / sender / receptor / API-KEY</a></div>'
@@ -49,7 +48,6 @@ if(n.type==='sms'){
 if(n.type==='email'){
  html+=selectField('حساب SMTP','cfg-provider_id',String(c.provider_id||0),[['0','سرویس پیش‌فرض'],...(ui.emailProviders||[]).map(p=>[String(p.id),p.name])])
  +field('Attribute ایمیل گیرنده','cfg-recipient_attribute',c.recipient_attribute||'email','text','dir="ltr"')
- +field('sign گیرنده (اختیاری)','cfg-recipient_sign',c.recipient_sign||'','text','dir="ltr"')
  +field('موضوع ایمیل','cfg-subject',c.subject||'')
  +selectField('قالب ایمیل','cfg-format',c.format||'text',[['text','متن ساده'],['html','HTML']])
  +textField('متن ایمیل','cfg-body',c.body||'',9)
@@ -79,9 +77,10 @@ if(n.type==='api'){
   +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}}. هر دامنه عمومی HTTPS بدون فهرست مجاز قابل استفاده است؛ آدرس‌های داخلی و IP خصوصی برای امنیت سرور مسدودند. پاسخ 2xx موفق است، نه تایید انجام فرآیند مقصد.</div>';
 }
 if(n.type==='exit')html+='<div class="muted-box">هنگام رسیدن کاربر به این مرحله، اجرای او پایان می‌یابد.</div>';
+if(['sms','email','webpush'].includes(n.type))html+='<button type="button" class="btn jb-preview-launch" id="preview-node">◉ پیش‌نمایش '+(n.type==='sms'?'پیامک':n.type==='email'?'ایمیل':'وب‌پوش نوتیفیکیشن')+'</button>';
 if(!readonly)html+='<button class="btn danger" id="delete-node" style="width:100%;margin-top:15px">حذف گره</button>';
 box.innerHTML=html;
-const map={'cfg-section':'section','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-receptor_sign':'receptor_sign','cfg-delivery_mode':'delivery_mode','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body','cfg-recipient_attribute':'recipient_attribute','cfg-recipient_sign':'recipient_sign','cfg-subject':'subject','cfg-format':'format','cfg-title':'title','cfg-ttl':'ttl','cfg-button_title':'button_title','cfg-button_url':'button_url'};
+const map={'cfg-section':'section','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-delivery_mode':'delivery_mode','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body','cfg-recipient_attribute':'recipient_attribute','cfg-subject':'subject','cfg-format':'format','cfg-title':'title','cfg-ttl':'ttl','cfg-button_title':'button_title','cfg-button_url':'button_url'};
 for(const [input,key] of Object.entries(map)){const el=$(input);if(!el)continue;el.disabled=readonly;el.addEventListener('input',()=>{c[key]=['hours','percent','provider_id','ttl'].includes(key)?Number(el.value):el.value;dirty=true;const nbody=$('node-'+n.id)?.querySelector('.node-body');if(nbody)nbody.textContent=describe(n)})}
 if(n.type==='sms'){
  const modeInput=$('cfg-delivery_mode');
@@ -125,8 +124,87 @@ if(n.type==='api'){
  });
  authFields();refreshSecret();
 }
+$('preview-node')?.addEventListener('click',()=>showMessagePreview(n));
 box.querySelectorAll('[data-day]').forEach(el=>{el.disabled=readonly;el.addEventListener('change',()=>{c.days=[...box.querySelectorAll('[data-day]:checked')].map(x=>Number(x.dataset.day));dirty=true;redraw()})});
 $('delete-node')?.addEventListener('click',()=>{if(!confirm('گره و اتصالات آن حذف شود؟'))return;graph.nodes=graph.nodes.filter(x=>x.id!==id);pendingSecrets.delete(id);clearedSecrets.delete(id);configuredSecrets.delete(id);graph.edges=graph.edges.filter(x=>x.source!==id&&x.target!==id);dirty=true;selectedId=null;redraw();box.innerHTML='<p class="help">گرهی انتخاب نشده است.</p>'});}
+// Previews are read-only, render unsaved inspector values and NEVER call any delivery endpoint.
+// Placeholder values are fictional. Real attributes are substituted only by backend dispatchers.
+const sampleAttributes={firstName:'کاربر',lastName:'نمونه',phone:'09120000000',email:'sample@example.com',userId:'sample-user-id'};
+const sampleText=value=>String(value??'').replace(/\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g,(_,key)=>
+ Object.hasOwn(sampleAttributes,key)?sampleAttributes[key]:`[${key}]`);
+let previewReturnFocus=null;
+function previewText(tag,className,value){
+ const el=document.createElement(tag);if(className)el.className=className;el.textContent=value==null?'':String(value);return el;
+}
+function previewDetail(label,value){
+ const wrap=document.createElement('div');wrap.className='jb-preview-detail';
+ wrap.append(previewText('span','jb-preview-detail-label',label),previewText('span','jb-preview-detail-value',value));return wrap;
+}
+function showMessagePreview(node){
+ const overlay=$('jb-preview-backdrop'),area=$('jb-preview-content');if(!overlay||!area)return;
+ const c=node.config||{};area.replaceChildren();
+ const mode=node.type;
+ const name=mode==='sms'?'پیش‌نمایش پیامک':mode==='email'?'پیش‌نمایش ایمیل':'پیش‌نمایش وب‌پوش نوتیفیکیشن';
+ $('jb-preview-heading').textContent=name;
+ $('jb-preview-description').textContent='فقط نمایش نمونه · اطلاعات واقعی کاربران خوانده نمی‌شود و هیچ پیامی ارسال نخواهد شد.';
+ if(mode==='sms'){
+   const message=(c.delivery_mode||'legacy')==='managed'?sampleText(c.message||''): 'ارسال با قالب قدیمی: '+(c.template||'تنظیم نشده');
+   const phone=previewText('div','jb-preview-phone');
+   phone.append(previewText('div','jb-preview-phone-header','پیامک · فرستنده نمونه'),previewText('div','jb-preview-chat-bubble',message||'متن پیامک را وارد کنید.'));
+   area.append(phone,previewDetail('تعداد نویسه‌های متن',new Intl.NumberFormat('fa-IR').format(message.length)),previewDetail('گیرنده',`مقدار نمونه از Attribute: ${c.receptor_attribute||'phone'}`));
+ } else if(mode==='email'){
+   const shell=document.createElement('div');shell.className='jb-preview-mail';
+   shell.append(previewDetail('از', (ui.emailProviders||[]).find(p=>String(p.id)===String(c.provider_id))?.name||'حساب SMTP پیش‌فرض'),
+     previewDetail('به', `${c.recipient_attribute||'email'} (مقدار نمونه)`),
+     previewDetail('موضوع',sampleText(c.subject||'بدون موضوع')));
+   if((c.format||'text')==='html'){
+     const frame=document.createElement('iframe');frame.className='jb-preview-mail-frame';
+     frame.setAttribute('title','پیش‌نمایش ایمن HTML ایمیل');frame.setAttribute('sandbox','');
+     frame.setAttribute('referrerpolicy','no-referrer');
+     // No scripts, remote images, external CSS, forms or network calls from user HTML.
+     // Browser sandbox also prevents navigating the parent window.
+     const csp=`default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'`;
+     const css='body{margin:0;padding:20px;overflow-wrap:anywhere;font:15px/1.9 Arial,Tahoma,sans-serif;color:#26354b;background:#fff}';
+     frame.srcdoc=`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><style>${css}</style></head><body>${sampleText(c.body||'<p>متن ایمیل را وارد کنید.</p>')}</body></html>`;
+     shell.append(frame,previewText('p','jb-preview-note','برای امنیت، تصاویر خارجی و اسکریپت‌ها در پیش‌نمایش HTML بارگذاری نمی‌شوند.'));
+   } else {
+     shell.append(previewText('div','jb-preview-mail-text',sampleText(c.body||'متن ایمیل را وارد کنید.')));
+   }
+   area.append(shell);
+ } else if(mode==='webpush'){
+   const push=document.createElement('article');push.className='jb-preview-push';
+   const logo=previewText('div','jb-preview-push-icon','🔔');
+   const body=document.createElement('div');body.className='jb-preview-push-main';
+   body.append(previewText('div','jb-preview-push-app','اعلان وب‌سایت · پیش‌نمایش'),
+     previewText('h3','jb-preview-push-title',sampleText(c.title||'عنوان نوتیفیکیشن')),
+     previewText('p','jb-preview-push-text',sampleText(c.body||'متن نوتیفیکیشن')));
+   push.append(logo,body);area.append(push);
+   if(c.button_title){const btn=previewText('div','jb-preview-push-action',sampleText(c.button_title));area.append(btn)}
+   area.append(previewDetail('مقصد کلیک',c.url||'مشخص نشده'),previewDetail('زمان اعتبار',`${c.ttl??24} ساعت`));
+ }
+ previewReturnFocus=document.activeElement;
+ overlay.hidden=false;document.body.classList.add('jb-preview-open');$('jb-preview-close').focus();
+}
+function hideMessagePreview(){
+ const overlay=$('jb-preview-backdrop');if(!overlay||overlay.hidden)return;
+ overlay.hidden=true;document.body.classList.remove('jb-preview-open');
+ $('jb-preview-content').replaceChildren();
+ if(previewReturnFocus?.isConnected)previewReturnFocus.focus();previewReturnFocus=null;
+}
+$('jb-preview-close')?.addEventListener('click',hideMessagePreview);
+$('jb-preview-done')?.addEventListener('click',hideMessagePreview);
+$('jb-preview-backdrop')?.addEventListener('click',e=>{if(e.target===$('jb-preview-backdrop'))hideMessagePreview()});
+document.addEventListener('keydown',e=>{
+ const overlay=$('jb-preview-backdrop');if(!overlay||overlay.hidden)return;
+ if(e.key==='Escape'){e.preventDefault();hideMessagePreview();return}
+ if(e.key==='Tab'){
+  const focusables=[...overlay.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),[tabindex="0"]')].filter(x=>x.getClientRects().length);
+  if(!focusables.length)return;
+  const first=focusables[0],last=focusables.at(-1);
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+ }
+});
 async function call(method,url,body){const response=await fetch(url,{method,credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content},body:JSON.stringify(body)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(Object.values(data.errors||{})[0]?.[0]||data.message||'HTTP '+response.status);return data}
 $('save')?.addEventListener('click',async()=>{
  if(readonly)return;
