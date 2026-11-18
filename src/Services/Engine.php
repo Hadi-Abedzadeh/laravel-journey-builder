@@ -40,6 +40,10 @@ final class Engine
                 ->select(['id','userId','value','updated_at']), 'section', $cfg['section'], 20)
                 ->where('key', $cfg['key'])
                 ->whereNotNull('userId')->whereNotNull('updated_at');
+            // name is NVARCHAR(50) in member_data; Laravel's Unicode binding is intentional.
+            if (trim((string)($cfg['name'] ?? '')) !== '') {
+                $query->where('name', $cfg['name']);
+            }
             if (trim((string)($cfg['sign'] ?? '')) !== '') {
                 TypedWhere::eq($query, 'sign', $cfg['sign'], 30);
             }
@@ -96,17 +100,27 @@ final class Engine
             'section', 'events', 20)->where('name', $cfg['event']);
         if (!empty($cfg['sign'])) TypedWhere::eq($query, 'sign', $cfg['sign'], 30);
         if ($sinceUtc !== null) $query->where('updated_at', '>=', $this->memberStamp($sinceUtc));
-        return $query->exists();
+        // Existing event-only conditions keep their original existence semantics.
+        if (trim((string)($cfg['key'] ?? '')) === '') return $query->exists();
+        $query->where('key', $cfg['key']);
+        // Test only records belonging to this event, never an unrelated event with the same key.
+        foreach ($query->select(['value'])->cursor() as $row) {
+            if (TriggerMatcher::matches($row->value, $cfg['operator'] ?? 'exists', (string)($cfg['value'] ?? ''))) return true;
+        }
+        return false;
     }
 
     private function attributeMatches(string $userId, array $cfg): bool
     {
         $query = TypedWhere::eq(
             TypedWhere::eq($this->db()->table(config('journey_builder.source_table', 'member_data')), 'userId', $userId, 100),
-            'section', 'attributes', 20)->where('key', $cfg['key']);
+            'section', $cfg['section'] ?? 'attributes', 20)->where('key', $cfg['key']);
+        if (trim((string)($cfg['name'] ?? '')) !== '') $query->where('name', $cfg['name']);
         if (!empty($cfg['sign'])) TypedWhere::eq($query, 'sign', $cfg['sign'], 30);
-        $value = $query->orderByDesc('updated_at')->orderByDesc('id')->value('value');
-        return TriggerMatcher::matches($value, $cfg['operator'], (string)($cfg['value'] ?? ''));
+        $row = $query->orderByDesc('updated_at')->orderByDesc('id')->first(['value']);
+        // The new is_empty operator requires an actual matching record with NULL/blank value.
+        if (!$row && ($cfg['operator'] ?? '') === 'is_empty') return false;
+        return TriggerMatcher::matches($row?->value, $cfg['operator'], (string)($cfg['value'] ?? ''));
     }
 
     // Lease rows and re-check flow state inside advance; no worker reads another flow's run as its own.

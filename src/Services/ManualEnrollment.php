@@ -40,9 +40,10 @@ final class ManualEnrollment
             TypedWhere::eq($db->table(config('journey_builder.source_table','member_data')), 'userId', $userId, 100),
             'section', (string)$cfg['section'], 20
         )->where('key', (string)$cfg['key']);
+        if (trim((string)($cfg['name'] ?? '')) !== '') $sourceQuery->where('name', $cfg['name']);
         if (!empty($cfg['sign'])) TypedWhere::eq($sourceQuery, 'sign', (string)$cfg['sign'], 30);
         $row = $sourceQuery->orderByDesc('updated_at')->orderByDesc('id')->first(['value']);
-        $matches = TriggerMatcher::matches($row?->value, (string)($cfg['operator'] ?? 'exists'), (string)($cfg['value'] ?? ''));
+        $matches = $row !== null && TriggerMatcher::matches($row->value, (string)($cfg['operator'] ?? 'exists'), (string)($cfg['value'] ?? ''));
         $existing = TypedWhere::eq($db->table('jb_runs')->where('flow_id', $flowId), 'user_id', $userId, 100)->exists();
         $digest = app(RunRetention::class)->userDigest($userId);
         if ($digest !== null) {

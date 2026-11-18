@@ -10,6 +10,9 @@ final class TriggerMatcher
         return match ($operator) {
             'exists' => $value !== null && $value !== '',
             'not_exists' => $value === null || $value === '',
+            // The SQL row must exist for is_empty; callers doing point lookups check this explicitly.
+            'is_empty' => $value === null || trim($value) === '',
+            'is_not_empty' => $value !== null && trim($value) !== '',
             'equals' => $value !== null && $value === $expected,
             'not_equals' => $value !== null && $value !== $expected,
             'starts_with' => $value !== null && str_starts_with($value, $expected),

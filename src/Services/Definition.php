@@ -19,7 +19,7 @@ final class Definition
         return [
             'nodes' => [
                 ['id' => 'start', 'type' => 'trigger', 'x' => 230, 'y' => 95,
-                    'config' => ['section' => 'attributes', 'sign' => '', 'key' => '', 'operator' => 'exists', 'value' => '']],
+                    'config' => ['section' => 'attributes', 'name' => '', 'sign' => '', 'key' => '', 'operator' => 'exists', 'value' => '']],
                 ['id' => 'finish', 'type' => 'exit', 'x' => 230, 'y' => 310, 'config' => []],
             ],
             'edges' => [['id' => 'start_to_finish', 'source' => 'start', 'port' => 'next', 'target' => 'finish']],
@@ -52,24 +52,34 @@ final class Definition
                 $starts++;
                 if (!in_array($cfg['section'] ?? '', ['attributes', 'events'], true)) self::fail('منبع ورود باید attributes یا events باشد.');
                 self::short($cfg['sign'] ?? '', 30, 'sign');
+                self::short($cfg['name'] ?? '', 50, 'name');
                 self::short($cfg['key'] ?? '', 50, 'key');
                 if ($publish && trim((string)($cfg['key'] ?? '')) === '') self::fail('برای ورود کاربران، کلید منبع (key) را تعیین کنید.');
-                if (!in_array($cfg['operator'] ?? '', ['exists', 'equals', 'not_equals', 'starts_with', 'not_starts_with'], true)) self::fail('عملگر ورودی نامعتبر است.');
+                if (!in_array($cfg['operator'] ?? '', ['exists', 'not_exists', 'is_empty', 'is_not_empty', 'equals', 'not_equals', 'starts_with', 'not_starts_with'], true)) self::fail('عملگر ورودی نامعتبر است.');
                 self::short($cfg['value'] ?? '', 1000, 'value');
-                if ($publish && !in_array($cfg['operator'], ['exists'], true) && ($cfg['value'] ?? '') === '') self::fail('مقدار فیلتر ورودی خالی است.');
+                if ($publish && in_array($cfg['operator'], ['equals','not_equals','starts_with','not_starts_with'], true) && ($cfg['value'] ?? '') === '') self::fail('برای این عملگر مقدار فیلتر ورود الزامی است.');
             }
             if ($type === 'condition' || $type === 'wait_event') {
                 self::short($cfg['event'] ?? '', 50, 'event name');
                 self::short($cfg['sign'] ?? '', 30, 'event sign');
                 if ($publish && trim((string)($cfg['event'] ?? '')) === '') self::fail('نام رویداد را وارد کنید.');
                 if ($type === 'condition' && !in_array($cfg['scope'] ?? 'ever', ['ever', 'after_enroll'], true)) self::fail('محدوده بررسی رویداد نامعتبر است.');
+                // Optional key/value filter checks a specific field belonging to this named event.
+                self::short($cfg['key'] ?? '', 50, 'event key');
+                self::short($cfg['value'] ?? '', 1000, 'event value');
+                if (!in_array($cfg['operator'] ?? 'exists', ['exists','not_exists','is_empty','is_not_empty','equals','not_equals','starts_with','not_starts_with'], true)) self::fail('عملگر مقدار رویداد نامعتبر است.');
+                if ($publish && ($cfg['key'] ?? '') !== '' && in_array($cfg['operator'] ?? 'exists', ['equals','not_equals','starts_with','not_starts_with'], true) && ($cfg['value'] ?? '') === '') self::fail('برای این عملگر مقدار رویداد الزامی است.');
+                if ($publish && ($cfg['key'] ?? '') === '' && ($cfg['value'] ?? '') !== '') self::fail('ابتدا key مربوط به رویداد را مشخص کنید.');
             }
             if ($type === 'attribute') {
+                if (!in_array($cfg['section'] ?? 'attributes', ['attributes','events'], true)) self::fail('بخش دیتابیس شرط معتبر نیست.');
+                self::short($cfg['name'] ?? '', 50, 'attribute name');
                 self::short($cfg['key'] ?? '', 50, 'attribute key');
                 self::short($cfg['sign'] ?? '', 30, 'attribute sign');
                 self::short($cfg['value'] ?? '', 1000, 'attribute value');
                 if ($publish && trim((string)($cfg['key'] ?? '')) === '') self::fail('کلید ویژگی را وارد کنید.');
-                if (!in_array($cfg['operator'] ?? '', ['exists','not_exists','equals','not_equals','starts_with','not_starts_with'],true)) self::fail('عملگر ویژگی نامعتبر است.');
+                if (!in_array($cfg['operator'] ?? '', ['exists','not_exists','is_empty','is_not_empty','equals','not_equals','starts_with','not_starts_with'],true)) self::fail('عملگر ویژگی نامعتبر است.');
+                if ($publish && in_array($cfg['operator'], ['equals','not_equals','starts_with','not_starts_with'], true) && ($cfg['value'] ?? '') === '') self::fail('برای این عملگر مقدار شرط الزامی است.');
             }
             if ($type === 'sms') {
                 $mode = $cfg['delivery_mode'] ?? 'legacy'; // Older stored graphs stay on legacy gateway.
