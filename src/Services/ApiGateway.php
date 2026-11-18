@@ -120,11 +120,20 @@ final class ApiGateway
             '{{runId}}' => (string)$run->id,
             '{{nodeId}}' => $run->node_id,
         ];
-        $replace = function ($value) use (&$replace, $placeholders) {
+        $attributes = [];
+        $renderer = new SmsTemplateRenderer();
+        $replace = function ($value) use (&$replace, $placeholders, &$attributes, $renderer, $run) {
             if (is_array($value)) return array_map($replace, $value);
             if (is_object($value)) { foreach ($value as $key => $item) $value->$key = $replace($item); return $value; }
-            if (is_string($value)) return strtr($value, $placeholders);
-            return $value;
+            if (!is_string($value)) return $value;
+            return preg_replace_callback('/\{\{\s*([A-Za-z][A-Za-z0-9_]{0,49})\s*\}\}/', function ($match) use ($placeholders, &$attributes, $renderer, $run) {
+                $name = $match[1];
+                $placeholder = '{{'.$name.'}}';
+                if (isset($placeholders[$placeholder])) return $placeholders[$placeholder];
+                if (!array_key_exists($name, $attributes)) $attributes[$name] = $renderer->attributeValue((string) $run->user_id, $name);
+                if ($attributes[$name] === null || $attributes[$name] === '') throw new \RuntimeException('API placeholder missing attribute: '.$name);
+                return $attributes[$name];
+            }, $value);
         };
         $body = $replace($body);
         try {
@@ -137,9 +146,18 @@ final class ApiGateway
                     ],
                     'allow_redirects' => false,
                 ])->withHeaders(['X-Idempotency-Key' => $dedupeKey]);
+            $extraHeaders = (array) ($config['headers'] ?? []);
+            if ($extraHeaders !== []) $req = $req->withHeaders($extraHeaders);
             if ($token !== null) {
                 $header = $config['token_header'] ?? 'bearer';
-                if ($header === 'x-api-key') $req = $req->withHeaders(['X-API-Key' => $token]);
+                if ($header === 'basic') {
+                    // Accept only the base64 credential, with an optional pasted "Basic " prefix.
+                    $basic = preg_replace('/^Basic\s+/i', '', trim($token));
+                    if (!preg_match('/^[A-Za-z0-9+\/=]+$/D', $basic) || base64_decode($basic, true) === false)
+                        return ['status'=>'failed','http_status'=>null,'error'=>'Invalid Basic Authorization credential'];
+                    $req = $req->withHeaders(['Authorization' => 'Basic '.$basic]);
+                }
+                elseif ($header === 'x-api-key') $req = $req->withHeaders(['X-API-Key' => $token]);
                 elseif ($header === 'custom') {
                     $name = (string)($config['token_custom_header'] ?? '');
                     if (!preg_match('/^X-[A-Za-z0-9-]{1,60}$/D', $name))

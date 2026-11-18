@@ -5,7 +5,7 @@ const labels={trigger:'ورود کاربران',condition:'شرط رویداد',
 const icons={trigger:'▶',condition:'◇',attribute:'◈',split:'⑂',slot:'◷',delay:'◴',wait_event:'⌛',sms:'✉',email:'✉',webpush:'◉',api:'↗',exit:'■'};
 const colors={trigger:'#3182ee',condition:'#e0a434',attribute:'#e7a238',split:'#9d6ddd',slot:'#ed9563',delay:'#eb9463',wait_event:'#cf6d75',sms:'#14a985',email:'#7b61e8',webpush:'#0e9fbd',api:'#3677d6',exit:'#8795a8'};
 const portLabels={next:'بعدی',yes:'بله',no:'خیر',a:'مسیر A',b:'مسیر B',event:'رویداد',timeout:'زمان تمام شد',success:'موفق',failure:'ناموفق'};
-const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone'},email:{provider_id:0,recipient_attribute:'email',subject:'',body:'',format:'text'},webpush:{provider_id:0,title:'',body:'',url:'',ttl:24,button_title:'',button_url:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
+const defaults={trigger:{section:'attributes',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever'},attribute:{key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone'},email:{provider_id:0,recipient_attribute:'email',subject:'',body:'',format:'text'},webpush:{provider_id:0,title:'',body:'',url:'',ttl:24,button_title:'',button_url:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',headers:{},body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
 const days=['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
 const opNames={exists:'وجود داشته باشد',not_exists:'وجود نداشته باشد',equals:'برابر باشد',not_equals:'برابر نباشد',starts_with:'با مقدار شروع شود',not_starts_with:'با مقدار شروع نشود'};
 const $=id=>document.getElementById(id);
@@ -71,10 +71,11 @@ if(n.type==='api'){
 
   +'<div id="api-secret-settings"><div class="field"><span>توکن اختصاصی (فقط هنگام ثبت/تعویض)</span><input id="cfg-secret" type="password" autocomplete="new-password" maxlength="4096" dir="ltr" placeholder="توکن جدید را اینجا وارد کنید"></div><div class="secret-state" id="secret-state"></div><div class="secret-tools"><button type="button" class="btn danger" id="clear-secret">حذف توکن ثبت‌شده</button></div><div class="help">توکن در جدول جدا و با APP_KEY رمزگذاری می‌شود. مقدار قبلی دوباره نمایش داده نمی‌شود؛ برای تغییر، توکن جدید وارد کنید و «ذخیره تغییرات» را بزنید.</div></div>'
   +'<div id="api-header-settings">'
-  +selectField('محل قرارگیری توکن در درخواست','cfg-token_header',c.token_header||'bearer',[['bearer','Authorization: Bearer'],['x-api-key','X-API-Key'],['custom','هدر سفارشی X-...']])
-  +'<div id="api-custom-header-settings">'+field('نام هدر سفارشی','cfg-token_custom_header',c.token_custom_header||'X-Access-Token','text','dir="ltr"')+'</div></div>'
+  +selectField('محل قرارگیری توکن در درخواست','cfg-token_header',c.token_header||'bearer',[['bearer','Authorization: Bearer'],['basic','Authorization: Basic'],['x-api-key','X-API-Key'],['custom','هدر سفارشی X-...']])
+  +'<div id="api-custom-header-settings">'+field('نام هدر سفارشی','cfg-token_custom_header',c.token_custom_header||'X-Access-Token','text','dir="ltr"')+'</div><div id="api-basic-help" class="help">در بخش توکن بالا مقدار Base64 مربوط به نام‌کاربری و رمز عبور را وارد کنید. پیشوند Basic لازم نیست و مقدار در گراف ذخیره نمی‌شود.</div></div>'
+  +'<div class="jb-request-headers"><b>هدرهای اضافی درخواست</b><p class="help">Content-Type: application/json به‌صورت خودکار تنظیم می‌شود. Authorization را در بخش احراز هویت بالا قرار بدهید.</p><div id="api-extra-headers"></div><button class="btn" type="button" id="api-add-header">+ افزودن هدر</button></div>'
   +textField('بدنه JSON (متغیرها قابل استفاده‌اند)','cfg-body',c.body||'{}',8)
-  +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}}. هر دامنه عمومی HTTPS بدون فهرست مجاز قابل استفاده است؛ آدرس‌های داخلی و IP خصوصی برای امنیت سرور مسدودند. پاسخ 2xx موفق است، نه تایید انجام فرآیند مقصد.</div>';
+  +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}} و Attributeهای کاربر مثل {{phone}}. فرمت WebEngage مثل user["system"]["phone"] پشتیبانی نمی‌شود. API فقط به دامنه عمومی HTTPS روی پورت 443 متصل می‌شود؛ HTTP با پورت سفارشی یا IP خصوصی مسدود است.</div>';
 }
 if(n.type==='exit')html+='<div class="muted-box">هنگام رسیدن کاربر به این مرحله، اجرای او پایان می‌یابد.</div>';
 if(['sms','email','webpush'].includes(n.type))html+='<button type="button" class="btn jb-preview-launch" id="preview-node">◉ پیش‌نمایش '+(n.type==='sms'?'پیامک':n.type==='email'?'ایمیل':'وب‌پوش نوتیفیکیشن')+'</button>';
@@ -91,12 +92,36 @@ if(n.type==='sms'){
  modeInput?.addEventListener('change',sync);sync();
 }
 if(n.type==='api'){
+ // HTTP headers are node-specific, non-secret key/value pairs; credentials stay encrypted separately.
+ const headerBox=$('api-extra-headers');
+ const headerEntries=Object.entries(c.headers && typeof c.headers==='object' && !Array.isArray(c.headers) ? c.headers : {});
+ const cleanHeaderEntries=headerEntries.map(([name,value])=>({name,value:String(value??'')}));
+ const updateHeaders=()=>{c.headers={};for(const row of cleanHeaderEntries){if(row.name.trim())c.headers[row.name.trim()]=row.value;}dirty=true;};
+ const drawHeaderRows=()=>{
+   headerBox.innerHTML='';
+   cleanHeaderEntries.forEach((row,index)=>{
+     const div=document.createElement('div');div.className='jb-header-row';
+     div.innerHTML='<input class="jb-header-name" aria-label="نام هدر" placeholder="X-Campaign" dir="ltr" maxlength="80"><input class="jb-header-value" aria-label="مقدار هدر" placeholder="مقدار" dir="ltr" maxlength="1000"><button class="btn danger jb-header-remove" type="button" aria-label="حذف هدر">×</button>';
+     const nameInput=div.querySelector('.jb-header-name'),valueInput=div.querySelector('.jb-header-value');
+     nameInput.value=row.name;valueInput.value=row.value;
+     nameInput.disabled=readonly;valueInput.disabled=readonly;
+     div.querySelector('.jb-header-remove').disabled=readonly;
+     nameInput.addEventListener('input',()=>{row.name=nameInput.value;updateHeaders()});
+     valueInput.addEventListener('input',()=>{row.value=valueInput.value;updateHeaders()});
+     div.querySelector('.jb-header-remove').addEventListener('click',()=>{cleanHeaderEntries.splice(index,1);updateHeaders();drawHeaderRows()});
+     headerBox.appendChild(div);
+   });
+ };
+ $('api-add-header').disabled=readonly;
+ $('api-add-header').addEventListener('click',()=>{if(cleanHeaderEntries.length>=12)return notify('حداکثر ۱۲ هدر اضافی مجاز است.',true);cleanHeaderEntries.push({name:'',value:''});drawHeaderRows();dirty=true;});
+ drawHeaderRows();
  const authSource=$('cfg-token_source'), authHeader=$('cfg-token_header'), secretInput=$('cfg-secret');
  const authFields=()=>{
    const mode=authSource?.value||'none';
    $('api-secret-settings')?.classList.toggle('api-hidden',mode!=='secret');
    $('api-header-settings')?.classList.toggle('api-hidden',mode==='none');
    $('api-custom-header-settings')?.classList.toggle('api-hidden',mode==='none'||authHeader?.value!=='custom');
+   $('api-basic-help')?.classList.toggle('api-hidden',mode==='none'||authHeader?.value!=='basic');
  };
  const refreshSecret=()=>{
    const state=$('secret-state');if(!state)return;

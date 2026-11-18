@@ -131,17 +131,38 @@ final class Definition
                 if ($publish && !ApiGateway::isAllowedUrl((string)($cfg['url'] ?? ''))) self::fail('آدرس API باید HTTPS با نام دامنه عمومی معتبر باشد.');
                 if (!in_array($cfg['method'] ?? 'POST', ['POST', 'PUT', 'PATCH'], true)) self::fail('متد API معتبر نیست.');
                 // Explicit allowlist: no plaintext secret can be smuggled into graph_json.
-                $allowedApiConfig = ['url','method','token_source','token_alias','token_header','token_custom_header','body']; // token_alias accepted only for decoding legacy drafts
+                $allowedApiConfig = ['url','method','token_source','token_alias','token_header','token_custom_header','headers','body']; // token_alias accepted only for decoding legacy drafts
                 if (array_diff(array_keys($cfg), $allowedApiConfig)) self::fail('تنظیمات ناشناخته API مجاز نیست؛ توکن را در بخش امن ثبت کنید.');
                 self::short($cfg['token_alias'] ?? '', 60, 'API token alias');
                 $source = $cfg['token_source'] ?? (($cfg['token_alias'] ?? '') !== '' ? 'alias' : 'none');
                 if (!in_array($source, ['none','secret'], true)) self::fail('هر گره API فقط می‌تواند بدون توکن یا با توکن اختصاصی همان گره اجرا شود.');
-                if (!in_array($cfg['token_header'] ?? 'bearer', ['bearer','x-api-key','custom'], true)) self::fail('نوع هدر توکن نامعتبر است.');
+                if (!in_array($cfg['token_header'] ?? 'bearer', ['bearer','basic','x-api-key','custom'], true)) self::fail('نوع هدر توکن نامعتبر است.');
                 self::short($cfg['token_custom_header'] ?? '', 64, 'API token header');
                 if (($cfg['token_header'] ?? '') === 'custom' && $source !== 'none' &&
                     !preg_match('/^X-[A-Za-z0-9-]{1,60}$/D', $cfg['token_custom_header'] ?? '')) self::fail('نام هدر اختصاصی باید با X- شروع شود.');
+                $headers = $cfg['headers'] ?? [];
+                if (!is_array($headers) || array_is_list($headers) && $headers !== [] || count($headers) > 12) self::fail('هدرهای اضافی API باید حداکثر ۱۲ کلید/مقدار باشند.');
+                $headerNamesSeen = [];
+                foreach ($headers as $name => $value) {
+                    if (!is_string($name) || !preg_match('/^[A-Za-z][A-Za-z0-9-]{0,79}$/D', $name) ||
+                        !is_string($value) || strlen($value) > 1000 || preg_match('/[\r\n\x00-\x1f\x7f]/', $value)) self::fail('نام یا مقدار هدر API معتبر نیست.');
+                    $lower = strtolower($name);
+                    if (isset($headerNamesSeen[$lower])) self::fail('هدر API تکراری است.');
+                    $headerNamesSeen[$lower] = true;
+                    if (in_array($lower, ['authorization','cookie','set-cookie','proxy-authorization','host','connection','transfer-encoding','content-length','x-api-key'], true)
+                        || preg_match('/(?:^|[-_])(token|secret|password|api-key)(?:$|[-_])/', $lower)) self::fail('هدر محرمانه را فقط در بخش توکن اختصاصی ثبت کنید.');
+                }
                 $body = $cfg['body'] ?? '{}';
                 if (!is_string($body) || strlen($body) > 6000) self::fail('بدنه درخواست API طولانی یا نامعتبر است.');
+                // Placeholders are explicit scalar attributes; WebEngage expressions are not supported.
+                if (preg_match_all('/\{\{(.*?)\}\}/s', $body, $placeholders)) {
+                    foreach ($placeholders[1] as $expression) {
+                        if (!preg_match('/^\s*[A-Za-z][A-Za-z0-9_]{0,49}\s*$/D', $expression))
+                            self::fail('متغیرهای بدنه API باید مانند {{phone}} باشند.');
+                    }
+                }
+                if (substr_count($body, '{{') !== count($placeholders[0] ?? []) || substr_count($body, '}}') !== count($placeholders[0] ?? []))
+                    self::fail('متغیر نامعتبر در بدنه API.');
                 $parsed = json_decode($body);
                 if (json_last_error() !== JSON_ERROR_NONE || !is_object($parsed)) self::fail('بدنه API باید JSON Object معتبر باشد.');
             }

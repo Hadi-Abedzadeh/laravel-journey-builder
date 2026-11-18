@@ -224,3 +224,30 @@ body.jb-preview-open{overflow:hidden}
 .jb-preview-push-text{font-size:13px;color:#4d6078;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;line-height:1.9}
 .jb-preview-push-action{display:inline-block;background:#eee9ff;color:#6250ba;padding:9px 17px;border-radius:10px;font-size:12px;font-weight:800;margin:0 0 15px}
 @media(max-width:600px){.jb-preview-backdrop{padding:8px}.jb-preview-dialog{max-height:95vh;border-radius:15px}.jb-preview-dialog-head,.jb-preview-content,.jb-preview-dialog-foot{padding:17px}.jb-preview-description{padding:0 17px 15px}.jb-preview-dialog-foot{align-items:start;flex-direction:column}.jb-preview-detail{flex-direction:column;gap:4px}}
+
+/* v0.3.4-beta.9: denser toolbox, no change to canvas node dimensions */
+@media (min-width:761px) {
+  .editor-layout { grid-template-columns:220px minmax(400px,1fr) 305px; }
+  .editor-layout > .side:first-child { padding:13px!important; }
+}
+.editor-layout .palette-label { margin:11px 0 5px!important; font-size:10px!important; }
+.editor-layout .palette-entry {
+  padding:5px 8px!important;
+  margin-bottom:4px!important;
+  min-height:35px;
+  border-radius:9px!important;
+  gap:7px!important;
+  font-size:11px;
+  line-height:1.45;
+}
+.editor-layout .palette-entry .iconbox {
+  width:25px!important;
+  height:25px!important;
+  border-radius:7px!important;
+  font-size:13px!important;
+}
+.jb-request-headers { margin:14px 0; border:1px solid #e2e8f4; border-radius:11px; padding:10px; }
+.jb-request-headers > b { font-size:12px; }
+.jb-header-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 32px; gap:5px; align-items:center; margin:6px 0; }
+.jb-header-row input { width:100%; min-width:0; padding:7px 6px; font-size:11px; }
+.jb-header-row button { padding:5px!important; min-width:0; }
