@@ -251,3 +251,21 @@ body.jb-preview-open{overflow:hidden}
 .jb-header-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 32px; gap:5px; align-items:center; margin:6px 0; }
 .jb-header-row input { width:100%; min-width:0; padding:7px 6px; font-size:11px; }
 .jb-header-row button { padding:5px!important; min-width:0; }
+
+
+/* v0.3.4-beta.12 — scalable designer workspace. The canvas grows with graph bounds. */
+.editor-layout{min-width:0}
+.viewport{min-width:0;min-height:0;overscroll-behavior:contain}
+.board-shell{position:relative;width:4800px;height:4000px;flex:none}
+.board{width:4800px;height:4000px;position:absolute;top:0;left:0;transform-origin:top left}
+.wires{width:100%;height:100%;overflow:visible}
+.jb-canvas-controls{display:flex;align-items:center;gap:5px;direction:rtl;flex-wrap:wrap;margin-inline-start:6px}
+.jb-canvas-controls .btn{padding:7px 10px;line-height:1.5;font-size:11px;white-space:nowrap}
+#jb-zoom-label{font-size:12px;color:#65758e;min-width:42px;text-align:center;direction:ltr}
+body.jb-editor-fullscreen{overflow:hidden}
+.editor-layout.jb-editor-expanded{display:block!important;position:fixed!important;z-index:1500;inset:0;width:100vw;height:100dvh!important;min-height:0!important;background:#f5f7fc}
+.editor-layout.jb-editor-expanded>.side{display:none!important}
+.editor-layout.jb-editor-expanded>.workspace{position:relative!important;top:0!important;height:100%!important;width:100%!important;min-height:0!important;overflow:hidden}
+.editor-layout.jb-editor-expanded .viewport{min-height:0;flex:1}
+.editor-layout.jb-editor-expanded .editor-toolbar{min-height:64px}
+@media(max-width:760px){.editor-toolbar{gap:6px}.jb-canvas-controls{width:100%;justify-content:center}.jb-canvas-controls .btn{font-size:10px;padding:5px 7px}}

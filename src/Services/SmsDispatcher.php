@@ -60,6 +60,10 @@ final class SmsDispatcher
                     $db->table('jb_sms_logs')->where('id', $row->id)->update([
                         'status'=>$status['status'],'http_status'=>$status['http_status'],
                         'error_message'=>$status['error'],'provider_message_id'=>$status['provider_message_id'],
+                        'delivery_status'=>$status['delivery_status']??null,
+                        'delivery_code'=>$status['delivery_code']??null,
+                        'delivery_checked_at'=>isset($status['delivery_code'])?now('UTC'):null,
+                        'delivered_at'=>($status['delivery_status']??null)==='delivered'?now('UTC'):null,
                         'sent_at'=>$status['status']==='sent'?now('UTC'):null,
                         'updated_at'=>now('UTC'),
                     ]);

@@ -54,7 +54,14 @@ final class Definition
                 self::short($cfg['sign'] ?? '', 30, 'sign');
                 self::short($cfg['name'] ?? '', 50, 'name');
                 self::short($cfg['key'] ?? '', 50, 'key');
-                if ($publish && trim((string)($cfg['key'] ?? '')) === '') self::fail('برای ورود کاربران، کلید منبع (key) را تعیین کنید.');
+                if ($publish && trim((string)($cfg['key'] ?? '')) === '' &&
+                    !(($cfg['section'] ?? '') === 'events' && trim((string)($cfg['name'] ?? '')) !== '')) {
+                    self::fail('برای ورود کاربران key یا برای رویدادها name را مشخص کنید.');
+                }
+                if ($publish && ($cfg['key'] ?? '') === '' &&
+                    !in_array($cfg['operator'] ?? '', ['exists'], true)) {
+                    self::fail('ورود صرفاً با نام رویداد باید عملگر «وجود داشته باشد» داشته باشد.');
+                }
                 if (!in_array($cfg['operator'] ?? '', ['exists', 'not_exists', 'is_empty', 'is_not_empty', 'equals', 'not_equals', 'starts_with', 'not_starts_with'], true)) self::fail('عملگر ورودی نامعتبر است.');
                 self::short($cfg['value'] ?? '', 1000, 'value');
                 if ($publish && in_array($cfg['operator'], ['equals','not_equals','starts_with','not_starts_with'], true) && ($cfg['value'] ?? '') === '') self::fail('برای این عملگر مقدار فیلتر ورود الزامی است.');
@@ -84,10 +91,13 @@ final class Definition
             if ($type === 'sms') {
                 $mode = $cfg['delivery_mode'] ?? 'legacy'; // Older stored graphs stay on legacy gateway.
                 if (!in_array($mode, ['managed', 'legacy'], true)) self::fail('روش ارسال پیامک نامعتبر است.');
-                $allowed = ['delivery_mode','template','message','provider_id','receptor_attribute','receptor_sign'];
+                $allowed = ['delivery_mode','template','message','provider_id','receptor_attribute','receptor_sign','success_mode','failure_policy'];
                 if (array_diff(array_keys($cfg), $allowed)) self::fail('تنظیمات ناشناخته گره پیامک.');
                 self::short($cfg['template'] ?? '', 150, 'sms template');
                 self::short($cfg['message'] ?? '', 1800, 'sms message');
+                if (!in_array($cfg['success_mode'] ?? 'accepted', ['accepted','delivered'], true)) self::fail('معیار موفقیت پیامک نامعتبر است.');
+                if (($cfg['success_mode'] ?? 'accepted') === 'delivered' && $mode !== 'managed') self::fail('تحویل واقعی فقط برای پنل مدیریت‌شده قابل پیگیری است.');
+                if (!in_array($cfg['failure_policy'] ?? 'hold', ['hold','branch'], true)) self::fail('سیاست شکست پیامک نامعتبر است.');
                 if ($mode === 'managed') {
                     // Recipient comes from this journey node, never from provider-level settings.
                     $receptorKey = (string) ($cfg['receptor_attribute'] ?? 'phone');
@@ -106,9 +116,10 @@ final class Definition
             }
             if (in_array($type, ['email','webpush'], true)) {
                 $allowed=$type==='email'
-                    ? ['provider_id','recipient_attribute','recipient_sign','subject','body','format']
-                    : ['provider_id','title','body','url','ttl','button_title','button_url'];
+                    ? ['provider_id','recipient_attribute','recipient_sign','subject','body','format','failure_policy']
+                    : ['provider_id','title','body','url','ttl','button_title','button_url','failure_policy'];
                 if (array_diff(array_keys($cfg),$allowed)) self::fail('تنظیمات ناشناخته گره ایمیل یا پوش.');
+                if (!in_array($cfg['failure_policy'] ?? 'hold', ['hold','branch'], true)) self::fail('سیاست شکست کانال نامعتبر است.');
                 $id=$cfg['provider_id']??0;
                 if ((!is_int($id) && !ctype_digit((string)$id)) || (int)$id<0) self::fail('شناسه پنل نامعتبر است.');
                 if ($type==='email') {
@@ -141,8 +152,9 @@ final class Definition
                 if ($publish && !ApiGateway::isAllowedUrl((string)($cfg['url'] ?? ''))) self::fail('آدرس API باید HTTPS با نام دامنه عمومی معتبر باشد.');
                 if (!in_array($cfg['method'] ?? 'POST', ['POST', 'PUT', 'PATCH'], true)) self::fail('متد API معتبر نیست.');
                 // Explicit allowlist: no plaintext secret can be smuggled into graph_json.
-                $allowedApiConfig = ['url','method','token_source','token_alias','token_header','token_custom_header','headers','body']; // token_alias accepted only for decoding legacy drafts
+                $allowedApiConfig = ['url','method','token_source','token_alias','token_header','token_custom_header','headers','body','failure_policy']; // token_alias accepted only for decoding legacy drafts
                 if (array_diff(array_keys($cfg), $allowedApiConfig)) self::fail('تنظیمات ناشناخته API مجاز نیست؛ توکن را در بخش امن ثبت کنید.');
+                if (!in_array($cfg['failure_policy'] ?? 'hold', ['hold','branch'], true)) self::fail('سیاست شکست API نامعتبر است.');
                 self::short($cfg['token_alias'] ?? '', 60, 'API token alias');
                 $source = $cfg['token_source'] ?? (($cfg['token_alias'] ?? '') !== '' ? 'alias' : 'none');
                 if (!in_array($source, ['none','secret'], true)) self::fail('هر گره API فقط می‌تواند بدون توکن یا با توکن اختصاصی همان گره اجرا شود.');

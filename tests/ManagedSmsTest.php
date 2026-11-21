@@ -34,6 +34,7 @@ final class ManagedSmsTest extends TestCase
         (require __DIR__.'/../database/migrations/2026_11_07_200000_create_journey_builder_package_tables.php')->up();
         (require __DIR__.'/../database/migrations/2026_11_08_100000_add_journey_builder_retention_tables.php')->up();
         (require __DIR__.'/../database/migrations/2026_11_08_180000_add_journey_sms_providers.php')->up();
+        (require __DIR__.'/../database/migrations/2026_11_18_140000_add_event_history_and_sms_receipts.php')->up();
         Schema::create('member_data', function (Blueprint $t) {
             $t->bigIncrements('id');
             $t->string('userId',100); $t->string('section',20);

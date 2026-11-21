@@ -18,6 +18,12 @@ return [
         'command_log_days' => (int) env('JOURNEY_BUILDER_COMMAND_LOG_DAYS', 14),
     ],
     'max_delivery_attempts' => (int) env('JOURNEY_BUILDER_MAX_DELIVERY_ATTEMPTS', 3),
+    // A source upsert alone cannot reconstruct an event that was overwritten.
+    // Enable only after wiring EventRecorder::record() into the producer.
+    'event_history' => [
+        'enabled' => (bool) env('JOURNEY_BUILDER_EVENT_HISTORY_ENABLED', false),
+        'retention_days' => max(91, (int) env('JOURNEY_BUILDER_EVENT_RETENTION_DAYS', 120)),
+    ],
     'timezone' => env('JOURNEY_BUILDER_TIMEZONE', 'Asia/Tehran'),
     'member_timezone' => env('JOURNEY_BUILDER_MEMBER_TIMEZONE', config('app.timezone', 'UTC')),
     'sms' => [
@@ -30,6 +36,9 @@ return [
         'enabled' => env('JOURNEY_BUILDER_SMS_ENABLED', false),
         'include_phone' => env('JOURNEY_BUILDER_SMS_INCLUDE_PHONE', false),
         'timeout' => 15,
+        // Poll provider delivery receipts after accepted send; separate from the original SMS send status.
+        'receipt_poll_enabled' => (bool) env('JOURNEY_BUILDER_SMS_RECEIPTS_ENABLED', false),
+        'receipt_batch' => (int) env('JOURNEY_BUILDER_SMS_RECEIPT_BATCH', 500),
     ],
     'channels' => [
         // Must be explicitly enabled after configuring and testing accounts.

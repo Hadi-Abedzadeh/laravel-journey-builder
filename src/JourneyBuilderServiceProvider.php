@@ -10,6 +10,8 @@ use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderStatus;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderRetry;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderPrune;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderSmsDispatch;
+use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderSmsStatus;
+use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderEventPrune;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderChannelDispatch;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderEnrollUser;
 use OpenJourney\LaravelJourneyBuilder\Console\Commands\JourneyBuilderPruneMonitoring;
@@ -42,7 +44,7 @@ final class JourneyBuilderServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 JourneyBuilderEnroll::class, JourneyBuilderTick::class,
-                JourneyBuilderStatus::class, JourneyBuilderRetry::class, JourneyBuilderPrune::class, JourneyBuilderSmsDispatch::class, JourneyBuilderEnrollUser::class, JourneyBuilderPruneMonitoring::class, JourneyBuilderChannelDispatch::class,
+                JourneyBuilderStatus::class, JourneyBuilderRetry::class, JourneyBuilderPrune::class, JourneyBuilderSmsDispatch::class, JourneyBuilderSmsStatus::class, JourneyBuilderEventPrune::class, JourneyBuilderEnrollUser::class, JourneyBuilderPruneMonitoring::class, JourneyBuilderChannelDispatch::class,
             ]);
         }
 
@@ -51,8 +53,15 @@ final class JourneyBuilderServiceProvider extends ServiceProvider
             Schedule::command('journey-builder:enroll --batch=1000')->everyMinute()->withoutOverlapping();
             Schedule::command('journey-builder:tick --batch=100')->everyMinute()->withoutOverlapping();
             Schedule::command('journey-builder:sms-dispatch --batch=1000')->everyMinute()->withoutOverlapping();
+            if (config('journey_builder.sms.receipt_poll_enabled', false)) {
+                Schedule::command('journey-builder:sms-status --batch=500')->everyMinute()->withoutOverlapping();
+            }
             Schedule::command('journey-builder:channel-dispatch email --batch=200')->everyMinute()->withoutOverlapping();
             Schedule::command('journey-builder:channel-dispatch webpush --batch=200')->everyMinute()->withoutOverlapping();
+            if (config('journey_builder.event_history.enabled', false)) {
+                Schedule::command('journey-builder:event-prune --days='.config('journey_builder.event_history.retention_days',120).' --batch=10000 --commit')
+                    ->dailyAt('03:10')->withoutOverlapping();
+            }
             Schedule::command('journey-builder:monitor-prune --commit')->dailyAt('02:15')->withoutOverlapping();
         }
     }

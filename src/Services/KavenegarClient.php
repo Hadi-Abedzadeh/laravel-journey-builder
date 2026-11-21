@@ -28,7 +28,7 @@ final class KavenegarClient
                     'receptor' => json_encode(array_map(static fn ($r) => $r->receptor, $messages), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
                     'sender' => json_encode(array_map(static fn ($r) => $r->sender, $messages), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
                     'message' => json_encode(array_map(static fn ($r) => $r->message_text, $messages), JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
-                    'localmessageids' => implode(',', array_map(fn ($row) => $this->localMessageId($provider, (int)$row->id), $messages)),
+                    'localmessageids' => implode(',', array_map(fn ($row) => $this->localMessageId($provider, (int)$row->id, (int)($row->attempts ?? 1)), $messages)),
                 ]);
             $http = $response->status();
             $json = $response->json();
@@ -45,10 +45,49 @@ final class KavenegarClient
         }
     }
 
-    /** A stable positive 60-bit local ID, namespaced per provider to prevent cross-project collisions. */
-    public function localMessageId(object $provider, int $logId): string
+    /** Get delivery information for up to 500 Kavenegar message IDs, keyed by ID. */
+    public function statuses(object $provider, array $messageIds): array
     {
-        return (string) hexdec(substr(hash('sha256', (string)$provider->code.'|'.$logId), 0, 15));
+        $ids = array_values(array_unique(array_map('intval', $messageIds)));
+        if (!$ids || count($ids) > 500 || min($ids) <= 0) {
+            throw new RuntimeException('SMS receipt polling requires 1..500 positive message IDs.');
+        }
+        try {
+            $key = Crypt::decryptString($provider->encrypted_api_key);
+            if ($key === '' || strlen($key) > 2048 || !preg_match('/^[A-Za-z0-9_-]+$/D', $key)) {
+                throw new RuntimeException('Invalid Kavenegar API key.');
+            }
+            $response = Http::connectTimeout(5)->timeout((int) config('journey_builder.sms.timeout', 20))
+                ->get('https://api.kavenegar.com/v1/'.rawurlencode($key).'/sms/status.json', [
+                    'messageid' => implode(',', $ids),
+                ]);
+            if (!$response->successful() || (int)data_get($response->json(),'return.status',0) !== 200) {
+                return [];
+            }
+            $entries = data_get($response->json(),'entries',[]);
+            if (!is_array($entries)) return [];
+            $expected = array_flip(array_map('strval', $ids));
+            $result = [];
+            foreach ($entries as $entry) {
+                if (!is_array($entry) || !isset($entry['messageid'],$entry['status'])) continue;
+                $id = (string)$entry['messageid'];
+                if (!isset($expected[$id]) || !is_numeric($entry['status'])) continue;
+                $result[$id] = (int)$entry['status'];
+            }
+            return $result;
+        } catch (\Throwable $e) {
+            // Never leak the API key or URL in exception messages or app logs.
+            return [];
+        }
+    }
+
+    /** A stable positive 60-bit local ID, namespaced per provider to prevent cross-project collisions. */
+    public function localMessageId(object $provider, int $logId, int $attempt = 1): string
+    {
+        // One idempotency key per attempt: a positively confirmed undelivered SMS
+        // may be explicitly retried, while a network-unknown attempt is never retried.
+        $suffix = $attempt > 1 ? '|attempt:'.$attempt : '';
+        return (string) hexdec(substr(hash('sha256', (string)$provider->code.'|'.$logId.$suffix), 0, 15));
     }
 
     private function matchEntries(array $messages, array $entries, int $http): array
@@ -71,6 +110,8 @@ final class KavenegarClient
             $results[(int)$row->id] = [
                 'status'=>'sent','http_status'=>$http,'error'=>null,
                 'provider_message_id'=>(string)$entry['messageid'],
+                'delivery_code'=>(int)($entry['status']??1),
+                'delivery_status'=>SmsReceiptPoller::classify((int)($entry['status']??1)),
             ];
         }
         return $results;

@@ -29,7 +29,9 @@ final class RetryService
                 $table=match($kind){'sms'=>'jb_sms_logs','api'=>'jb_api_logs',default=>'jb_channel_dispatches'};
                 $log=TypedWhere::eq($db->table($table)->where('run_id',$run->id),'node_id',$run->node_id,80)->first();
                 if ($log) {
-                    if ($log->status !== 'failed') return 'delivery_'.$log->status.'_blocked';
+                    $confirmedUndelivered = $kind === 'sms' && $log->status === 'sent'
+                        && ($log->delivery_status ?? null) === 'undelivered';
+                    if ($log->status !== 'failed' && !$confirmedUndelivered) return 'delivery_'.$log->status.'_blocked';
                     if ((int)$log->attempts >= (int)config('journey_builder.max_delivery_attempts',3)) return 'attempt_limit';
                 }
             }
@@ -38,11 +40,25 @@ final class RetryService
             $db->table('jb_retry_audit')->insert([
                 'flow_id'=>$run->flow_id, 'run_id'=>$run->id,'node_id'=>$run->node_id,
                 'retry_kind'=>in_array($kind,['sms','api','email','webpush'],true)?'external':'run',
-                'previous_status'=>$log?->status, 'previous_error'=>$run->last_error, 'created_at'=>$now,
+                'previous_status'=>$log?->status,
+                'previous_error'=>mb_substr((string)$run->last_error .
+                    (($kind==='sms' && ($log->delivery_status??null)==='undelivered')
+                        ? ' / undelivered messageid: '.(string)$log->provider_message_id : ''), 0, 2000),
+                'created_at'=>$now,
             ]);
             if ($log) {
-                TypedWhere::eq($db->table(match($kind){'sms'=>'jb_sms_logs','api'=>'jb_api_logs',default=>'jb_channel_dispatches'})->where('id',$log->id),'status','failed',20)
-                    ->update(['status'=>'retry_authorized','updated_at'=>$now]);
+                $statusToMatch = $kind === 'sms' && ($log->delivery_status ?? null) === 'undelivered'
+                    ? 'sent' : 'failed';
+                $updates = ['status'=>'retry_authorized','updated_at'=>$now];
+                if ($kind==='sms' && ($log->delivery_status ?? null)==='undelivered') {
+                    $updates += [
+                        'delivery_status'=>null, 'delivery_code'=>null,
+                        'delivery_checked_at'=>null, 'delivered_at'=>null,
+                        'provider_message_id'=>null,
+                    ];
+                }
+                TypedWhere::eq($db->table(match($kind){'sms'=>'jb_sms_logs','api'=>'jb_api_logs',default=>'jb_channel_dispatches'})->where('id',$log->id),'status',$statusToMatch,20)
+                    ->update($updates);
             }
             // Leave node_id and wait_started_at untouched: the user resumes at the same step.
             TypedWhere::eq($db->table('jb_runs')->where('id',$run->id), 'state','failed',20)

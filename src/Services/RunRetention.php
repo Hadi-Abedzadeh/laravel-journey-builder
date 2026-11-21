@@ -61,6 +61,20 @@ final class RunRetention
                     'status',['unknown','sending','retry_authorized','pending'],20)->exists()) return false;
             }
 
+            // Keep the accepted SMS log until a delivery receipt becomes terminal.
+            // Otherwise purge_on_exit would delete its messageid before sms-status can poll it.
+            if (config('journey_builder.sms.receipt_poll_enabled', false)) {
+                $pendingReceipts = TypedWhere::eq(
+                    $db->table('jb_sms_logs')->where('run_id',$runId)->whereNotNull('provider_id')
+                       ->whereNotNull('provider_message_id'), 'status', 'sent', 20
+                )->where(function ($q) {
+                    $q->whereNull('delivery_status')->orWhere(function ($q) {
+                        TypedWhere::oneOf($q,'delivery_status',['queued','submitted'],20);
+                    });
+                });
+                if ($pendingReceipts->exists()) return false;
+            }
+
             $digest = $this->userDigest((string) $run->user_id);
             if ($digest === null) throw new RuntimeException('Missing stable enrollment digest key.');
             if (!TypedWhere::eq($db->table('jb_run_hashes')->where('flow_id',$run->flow_id),'user_digest',$digest,64)->exists()) {

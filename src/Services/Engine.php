@@ -35,10 +35,13 @@ final class Engine
             $trigger = collect($graph['nodes'] ?? [])->firstWhere('type', 'trigger');
             if (!$trigger) continue;
             $cfg = $trigger['config'];
-            if (empty($cfg['key'])) continue;
+            $eventOnly = ($cfg['section'] ?? '') === 'events'
+                && trim((string)($cfg['name'] ?? '')) !== ''
+                && trim((string)($cfg['key'] ?? '')) === '';
+            if (empty($cfg['key']) && !$eventOnly) continue;
             $query = TypedWhere::eq($db->table(config('journey_builder.source_table', 'member_data'))
                 ->select(['id','userId','value','updated_at']), 'section', $cfg['section'], 20)
-                ->where('key', $cfg['key'])
+                ->when(!$eventOnly, fn ($q) => $q->where('key', $cfg['key']))
                 ->whereNotNull('userId')->whereNotNull('updated_at');
             // name is NVARCHAR(50) in member_data; Laravel's Unicode binding is intentional.
             if (trim((string)($cfg['name'] ?? '')) !== '') {
@@ -59,7 +62,7 @@ final class Engine
             $rows = $query->orderBy('updated_at')->orderBy('id')->limit(min(1000,max(1,$batch)))->get();
             $created = 0;
             foreach ($rows as $row) {
-                if (TriggerMatcher::matches($row->value, $cfg['operator'], (string)($cfg['value'] ?? ''))) {
+                if ($eventOnly || TriggerMatcher::matches($row->value, $cfg['operator'], (string)($cfg['value'] ?? ''))) {
                     try {
                         $enrolled = $db->transaction(function () use ($db, $flow, $row, $trigger) {
                             $key = app(RunRetention::class)->userDigest((string) $row->userId);
@@ -93,8 +96,11 @@ final class Engine
         return $results;
     }
 
-    private function eventSeen(string $userId, array $cfg, ?string $sinceUtc = null): bool
+    private function eventSeen(string $userId, array $cfg, ?string $sinceUtc = null, ?int $afterEventId = null): bool
     {
+        if ($sinceUtc !== null && config('journey_builder.event_history.enabled', false)) {
+            return app(EventRecorder::class)->seenSince($userId, $cfg, $sinceUtc, $afterEventId);
+        }
         $query = TypedWhere::eq(
             TypedWhere::eq($this->db()->table(config('journey_builder.source_table', 'member_data')), 'userId', $userId, 100),
             'section', 'events', 20)->where('name', $cfg['event']);
@@ -203,10 +209,25 @@ final class Engine
                     break;
                 case 'delay':
                 case 'wait_event':
-                    if (!$run->wait_started_at) $this->write($run,['wait_started_at'=>$this->stamp()]);
+                    if (!$run->wait_started_at) {
+                        $changes = ['wait_started_at'=>$this->stamp()];
+                        if ($node['type'] === 'wait_event' && config('journey_builder.event_history.enabled', false)) {
+                            $changes['wait_event_cursor_id'] = app(EventRecorder::class)->latestId(
+                                (string)$run->user_id, (string)$cfg['event']);
+                        }
+                        $this->write($run, $changes);
+                    }
+                    // When upgrading an already-waiting run, no historical cursor exists.
+                    // Snapshot at the first post-upgrade tick instead of treating all old
+                    // ledger records as events that happened during this wait.
+                    if ($node['type']==='wait_event' && config('journey_builder.event_history.enabled', false)
+                        && ($run->wait_event_cursor_id ?? null) === null) {
+                        $this->write($run, ['wait_event_cursor_id'=>app(EventRecorder::class)->latestId(
+                            (string)$run->user_id, (string)$cfg['event'])]);
+                    }
                     $started=CarbonImmutable::parse($run->wait_started_at,'UTC');
                     $due=$started->addHours((int)$cfg['hours']);
-                    if ($node['type']==='wait_event' && $this->eventSeen($run->user_id,$cfg,$run->wait_started_at)) {
+                    if ($node['type']==='wait_event' && $this->eventSeen($run->user_id,$cfg,$run->wait_started_at, (int)($run->wait_event_cursor_id ?? 0))) {
                         $next='event';
                     } elseif ($this->now()->greaterThanOrEqualTo($due)) {
                         $next=$node['type']==='wait_event'?'timeout':'next';
@@ -228,6 +249,7 @@ final class Engine
                         return;
                     }
                     if ($result==='failed') {
+                        if (($cfg['failure_policy'] ?? 'hold') === 'branch') { $next = 'failure'; break; }
                         $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'Email/push delivery failed; explicit retry required']);
                         return;
                     }
@@ -244,8 +266,35 @@ final class Engine
                         return;
                     }
                     if ($result==='failed') {
+                        if (($cfg['failure_policy'] ?? 'hold') === 'branch') { $next = 'failure'; break; }
                         $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS/API delivery failed; retry from this node is required']);
                         return;
+                    }
+                    // Default preserves the historic 'accepted by provider' semantics.
+                    if (($cfg['success_mode'] ?? 'accepted') === 'delivered' &&
+                        ($cfg['delivery_mode'] ?? 'legacy') === 'managed') {
+                        $receipt = TypedWhere::eq($db->table('jb_sms_logs')->where('run_id',$run->id), 'node_id', $run->node_id, 80)->first();
+                        if (!$receipt || !$receipt->provider_message_id) {
+                            $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS receipt ID missing; reconcile manually']);
+                            return;
+                        }
+                        if ($receipt->delivery_status === 'undelivered') {
+                            if (($cfg['failure_policy'] ?? 'hold') === 'branch') { $next = 'failure'; break; }
+                            $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS was not delivered; manual action needed']);
+                            return;
+                        }
+                        if ($receipt->delivery_status === 'unknown') {
+                            $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS receipt indeterminate; manual reconciliation required']);
+                            return;
+                        }
+                        if ($receipt->delivery_status !== 'delivered') {
+                            if (!config('journey_builder.sms.receipt_poll_enabled', false)) {
+                                $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'Enable SMS receipt polling to wait for real delivery']);
+                                return;
+                            }
+                            $this->write($run,['state'=>'waiting','next_run_at'=>$this->stamp($this->now()->addMinutes(2))]);
+                            return;
+                        }
                     }
                     $next='success';
                     break;
@@ -256,6 +305,7 @@ final class Engine
                         return;
                     }
                     if ($result==='failed') {
+                        if (($cfg['failure_policy'] ?? 'hold') === 'branch') { $next = 'failure'; break; }
                         $this->write($run,['state'=>'failed','next_run_at'=>null,'last_error'=>'SMS/API delivery failed; retry from this node is required']);
                         return;
                     }
@@ -267,7 +317,9 @@ final class Engine
             if (!$target) throw new \RuntimeException('Unconnected output '.$next.' on '.$run->node_id);
             $from=$run->node_id;
             $this->db()->transaction(function() use ($run,$target,$from,$next) {
-                $this->write($run,['node_id'=>$target,'wait_started_at'=>null,'state'=>'ready','next_run_at'=>$this->stamp()]);
+                $changes = ['node_id'=>$target,'wait_started_at'=>null,'state'=>'ready','next_run_at'=>$this->stamp()];
+                if (config('journey_builder.event_history.enabled', false)) $changes['wait_event_cursor_id'] = null;
+                $this->write($run,$changes);
                 $this->db()->table('jb_step_logs')->insert([
                     'flow_id'=>$run->flow_id,'run_id'=>$run->id,'user_id'=>$run->user_id,
                     'from_node_id'=>$from,'to_node_id'=>$target,'port'=>$next,'created_at'=>$this->stamp(),

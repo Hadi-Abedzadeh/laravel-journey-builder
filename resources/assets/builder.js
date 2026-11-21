@@ -12,22 +12,77 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=> 'n'+Math.random().toString(36).slice(2,11);
 let selectedId=null,source=null,dirty=false;
+// Editor viewport is independent from the stored graph coordinates.
+// Large journeys should never be clipped by a fixed 2600 x 2200 board.
+const NODE_WIDTH=238, NODE_HEIGHT=142, BOARD_MARGIN=620, MAX_COORD=10000;
+const board=$('board'), boardShell=$('board-shell'), viewport=$('viewport');
+let zoom=1, boardWidth=4800, boardHeight=4000;
+function measureNodes(){
+  const ns=graph.nodes.filter(n=>Number.isFinite(Number(n.x))&&Number.isFinite(Number(n.y)));
+  return {
+    minX:ns.length?Math.min(...ns.map(n=>Math.max(0,Number(n.x)))):0,
+    minY:ns.length?Math.min(...ns.map(n=>Math.max(0,Number(n.y)))):0,
+    maxX:ns.length?Math.max(...ns.map(n=>Math.min(MAX_COORD,Number(n.x)))):0,
+    maxY:ns.length?Math.max(...ns.map(n=>Math.min(MAX_COORD,Number(n.y)))):0,
+  };
+}
+function sizeBoard(){
+  const bounds=measureNodes();
+  // Keep space to the right/below the last node for its sockets and future branches.
+  boardWidth=Math.max(4800,Math.ceil((bounds.maxX+NODE_WIDTH+BOARD_MARGIN)/200)*200,
+    Math.ceil((viewport.clientWidth/zoom+BOARD_MARGIN)/200)*200);
+  boardHeight=Math.max(4000,Math.ceil((bounds.maxY+NODE_HEIGHT+BOARD_MARGIN)/200)*200,
+    Math.ceil((viewport.clientHeight/zoom+BOARD_MARGIN)/200)*200);
+  board.style.width=boardWidth+'px';
+  board.style.height=boardHeight+'px';
+  board.style.transform=`scale(${zoom})`;
+  boardShell.style.width=(boardWidth*zoom)+'px';
+  boardShell.style.height=(boardHeight*zoom)+'px';
+  const svg=$('wires');
+  svg.setAttribute('viewBox',`0 0 ${boardWidth} ${boardHeight}`);
+  svg.setAttribute('width',String(boardWidth));
+  svg.setAttribute('height',String(boardHeight));
+}
+function setZoom(value,{focus=true}={}){
+  const next=Math.min(1.5,Math.max(0.02,Math.round(value*1000)/1000));
+  const centerX=(viewport.scrollLeft+viewport.clientWidth/2)/zoom;
+  const centerY=(viewport.scrollTop+viewport.clientHeight/2)/zoom;
+  zoom=next;
+  sizeBoard();
+  if(focus){viewport.scrollLeft=centerX*zoom-viewport.clientWidth/2;
+    viewport.scrollTop=centerY*zoom-viewport.clientHeight/2;}
+  const label=$('jb-zoom-label');if(label)label.textContent=Math.round(zoom*100)+'٪';
+}
+function fitNodes(){
+  if(!graph.nodes.length){setZoom(1,{focus:false});viewport.scrollLeft=0;viewport.scrollTop=0;return;}
+  const {minX,minY,maxX,maxY}=measureNodes();
+  const contentW=maxX-minX+NODE_WIDTH+120, contentH=maxY-minY+NODE_HEIGHT+120;
+  const target=Math.min(1,Math.max(0.02,Math.min((viewport.clientWidth-48)/contentW,(viewport.clientHeight-48)/contentH)));
+  setZoom(target,{focus:false});
+  viewport.scrollLeft=Math.max(0,(minX-60)*zoom);
+  viewport.scrollTop=Math.max(0,(minY-60)*zoom);
+}
+function focusNode(node){
+  viewport.scrollLeft=Math.max(0,(node.x+NODE_WIDTH/2)*zoom-viewport.clientWidth/2);
+  viewport.scrollTop=Math.max(0,(node.y+NODE_HEIGHT/2)*zoom-viewport.clientHeight/2);
+}
+
 const configuredSecrets=new Set(ui.secretNodeIds||[]), pendingSecrets=new Map(), clearedSecrets=new Set();
 function notify(text,error=false){const t=$('toast');t.textContent=text;t.style.background=error?'#ae3049':'#233d65';t.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.style.display='none',4800)}
 function describe(n){const c=n.config||{};switch(n.type){case'trigger':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'کلید تعیین نشده'} · ${opNames[c.operator]||''}`;case'condition':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.scope==='after_enroll'?'بعد از ورود':'کل سوابق'}`;case'attribute':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'تعیین نشده'} · ${opNames[c.operator]||''}`;case'split':return `${c.percent??50}٪ مسیر A / ${100-(Number(c.percent)||0)}٪ مسیر B`;case'slot':return `${(c.days||[]).map(d=>days[d]).join('، ')} · ${c.from||''} تا ${c.to||''}`;case'delay':return `${c.hours??24} ساعت`;case'wait_event':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.hours??24} ساعت`;case'sms':return (c.delivery_mode||'legacy')==='managed'?`پیامک متنی · ${c.message?String(c.message).slice(0,38):'متن تعیین نشده'}`:`قالب قدیمی: ${c.template||'تعیین نشده'}`;case'email':return `ایمیل · ${c.subject||'موضوع تعیین نشده'}`;case'webpush':return `وب‌پوش نوتیفیکیشن · ${c.title||'عنوان تعیین نشده'}`;case'api':return `${c.method||'POST'} · ${c.url||'آدرس تعیین نشده'}`;case'exit':return 'پایان این مسیر'}}
 function redraw(){const root=$('nodes');root.innerHTML='';for(const n of graph.nodes){n.x=Number(n.x)||0;n.y=Number(n.y)||0;const el=document.createElement('div');el.id='node-'+n.id;el.className='node'+(n.id===selectedId?' selected':'');el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.setProperty('--accent',colors[n.type]||'#678');const outs=(ports[n.type]||[]).map((port,i)=>`<button class="socket output ${source?.id===n.id&&source.port===port?'highlight':''}" type="button" data-port="${port}" title="${esc(portLabels[port])}" style="top:${45+i*27}px"><span class="socket-label">${esc(portLabels[port])}</span></button>`).join('');el.innerHTML=`<div class="node-head"><span class="iconbox">${icons[n.type]||'■'}</span><strong>${labels[n.type]||n.type}</strong></div><div class="node-body">${esc(describe(n))}</div>${n.type!=='trigger'?'<button type="button" class="socket input" title="ورودی گره"></button>':''}${outs}`;el.addEventListener('click',()=>select(n.id));el.querySelector('.node-head').addEventListener('pointerdown',e=>moveNode(e,n,el));el.querySelector('.input')?.addEventListener('click',e=>{e.stopPropagation();connect(n.id)});el.querySelectorAll('.output').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();if(readonly)return;source={id:n.id,port:btn.dataset.port};redraw();notify('حالا ورودی گره مقصد را بزنید.')}));root.appendChild(el)}drawWires()}
-function drawWires(){const svg=$('wires');svg.innerHTML='';const ns='http://www.w3.org/2000/svg';const defs=document.createElementNS(ns,'defs'),m=document.createElementNS(ns,'marker');m.setAttribute('id','jb-arrow');[['markerWidth','9'],['markerHeight','9'],['refX','8'],['refY','3'],['orient','auto']].forEach(([k,v])=>m.setAttribute(k,v));const tri=document.createElementNS(ns,'path');tri.setAttribute('d','M0 0 L8 3 L0 6 z');tri.setAttribute('fill','#94a4bd');m.appendChild(tri);defs.appendChild(m);svg.appendChild(defs);for(const e of graph.edges){const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);if(!a||!b)continue;const i=(ports[a.type]||[]).indexOf(e.port);if(i<0)continue;const sx=a.x+238,sy=a.y+54+i*27,tx=b.x,ty=b.y+64,dx=Math.max(75,Math.abs(tx-sx)*.48);const p=document.createElementNS(ns,'path');p.setAttribute('class','wire');p.setAttribute('d',`M${sx} ${sy} C${sx+dx} ${sy},${tx-dx} ${ty},${tx} ${ty}`);p.setAttribute('marker-end','url(#jb-arrow)');p.addEventListener('click',()=>{if(!readonly&&confirm('این اتصال حذف شود؟')){graph.edges=graph.edges.filter(z=>z!==e);dirty=true;redraw()}});svg.appendChild(p)}}
-function moveNode(e,n,el){if(readonly||e.button!==0)return;e.preventDefault();const sx=e.clientX,sy=e.clientY,ox=n.x,oy=n.y;el.setPointerCapture(e.pointerId);const onmove=ev=>{n.x=Math.max(0,Math.min(2360,Math.round(ox+ev.clientX-sx)));n.y=Math.max(0,Math.min(2080,Math.round(oy+ev.clientY-sy)));el.style.left=n.x+'px';el.style.top=n.y+'px';drawWires()};const onup=()=>{el.removeEventListener('pointermove',onmove);el.removeEventListener('pointerup',onup);dirty=true;select(n.id)};el.addEventListener('pointermove',onmove);el.addEventListener('pointerup',onup)}
+function drawWires(){sizeBoard();const svg=$('wires');svg.innerHTML='';const ns='http://www.w3.org/2000/svg';const defs=document.createElementNS(ns,'defs'),m=document.createElementNS(ns,'marker');m.setAttribute('id','jb-arrow');[['markerWidth','9'],['markerHeight','9'],['refX','8'],['refY','3'],['orient','auto']].forEach(([k,v])=>m.setAttribute(k,v));const tri=document.createElementNS(ns,'path');tri.setAttribute('d','M0 0 L8 3 L0 6 z');tri.setAttribute('fill','#94a4bd');m.appendChild(tri);defs.appendChild(m);svg.appendChild(defs);for(const e of graph.edges){const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);if(!a||!b)continue;const i=(ports[a.type]||[]).indexOf(e.port);if(i<0)continue;const sx=a.x+NODE_WIDTH,sy=a.y+54+i*27,tx=b.x,ty=b.y+64,dx=Math.max(75,Math.abs(tx-sx)*.48);const p=document.createElementNS(ns,'path');p.setAttribute('class','wire');p.setAttribute('d',`M${sx} ${sy} C${sx+dx} ${sy},${tx-dx} ${ty},${tx} ${ty}`);p.setAttribute('marker-end','url(#jb-arrow)');p.addEventListener('click',()=>{if(!readonly&&confirm('این اتصال حذف شود؟')){graph.edges=graph.edges.filter(z=>z!==e);dirty=true;redraw()}});svg.appendChild(p)}}
+function moveNode(e,n,el){if(readonly||e.button!==0)return;e.preventDefault();const sx=e.clientX,sy=e.clientY,ox=n.x,oy=n.y;el.setPointerCapture(e.pointerId);const onmove=ev=>{n.x=Math.max(0,Math.min(MAX_COORD,Math.round(ox+(ev.clientX-sx)/zoom)));n.y=Math.max(0,Math.min(MAX_COORD,Math.round(oy+(ev.clientY-sy)/zoom)));el.style.left=n.x+'px';el.style.top=n.y+'px';drawWires()};const onup=()=>{el.removeEventListener('pointermove',onmove);el.removeEventListener('pointerup',onup);dirty=true;select(n.id)};el.addEventListener('pointermove',onmove);el.addEventListener('pointerup',onup)}
 function connect(id){if(readonly||!source)return;if(source.id===id)return notify('گره به خودش متصل نمی‌شود.',true);graph.edges=graph.edges.filter(e=>!(e.source===source.id&&e.port===source.port));graph.edges.push({id:uid(),source:source.id,port:source.port,target:id});source=null;dirty=true;redraw()}
-function addNode(type,x,y){if(readonly)return notify('طرح در وضعیت فعلی قابل ویرایش نیست.',true);if(type==='trigger'&&graph.nodes.some(n=>n.type==='trigger'))return notify('هر جرنی فقط یک نقطه شروع دارد.',true);const n={id:uid(),type,x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y)),config:structuredClone(defaults[type])};graph.nodes.push(n);dirty=true;select(n.id)}
+function addNode(type,x,y){if(readonly)return notify('طرح در وضعیت فعلی قابل ویرایش نیست.',true);if(type==='trigger'&&graph.nodes.some(n=>n.type==='trigger'))return notify('هر جرنی فقط یک نقطه شروع دارد.',true);const n={id:uid(),type,x:Math.max(0,Math.min(MAX_COORD,Math.round(x))),y:Math.max(0,Math.min(MAX_COORD,Math.round(y))),config:structuredClone(defaults[type])};graph.nodes.push(n);dirty=true;select(n.id);focusNode(n)}
 function field(label,id,value,type='text',extra=''){return `<div class="field"><span>${label}</span><input id="${id}" type="${type}" value="${esc(value)}" ${extra}></div>`}
 function selectField(label,id,value,choices){return `<div class="field"><span>${label}</span><select id="${id}">${choices.map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`}
 function textField(label,id,value,rows=4){return `<div class="field"><span>${label}</span><textarea id="${id}" rows="${rows}">${esc(value)}</textarea></div>`}
 const ops=Object.entries(opNames);const eventScope=[['ever','تمام سوابق موجود'],['after_enroll','از زمان ورود به جرنی']];
 function select(id){selectedId=id;redraw();const n=graph.nodes.find(n=>n.id===id),box=$('inspector');if(!n){box.innerHTML='<p class="help">گرهی انتخاب نشده است.</p>';return}const c=n.config||{};let html=`<b>${labels[n.type]}</b>`;
-if(n.type==='trigger')html+=selectField('بخش دیتابیس (section)','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('نام رویداد / مجموعه (name، اختیاری)','cfg-name',c.name||'','text','maxlength="50"')+field('منبع sign (اختیاری)','cfg-sign',c.sign||'')+field('کلید (key)','cfg-key',c.key||'')+selectField('فیلتر ورود','cfg-operator',c.operator||'exists',ops)+field('مقدار (در صورت نیاز)','cfg-value',c.value||'')+'<div class="help">مثال: events / Reg_Started / NationalCode / خالی باشد. مقدار خالی یعنی ردیفی با value برابر NULL یا رشته خالی وجود دارد.</div>';
+if(n.type==='trigger')html+=selectField('بخش دیتابیس (section)','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('نام رویداد / مجموعه (name، اختیاری)','cfg-name',c.name||'','text','maxlength="50"')+field('منبع sign (اختیاری)','cfg-sign',c.sign||'')+field('کلید (key، برای رویداد اختیاری)','cfg-key',c.key||'')+selectField('فیلتر ورود','cfg-operator',c.operator||'exists',ops)+field('مقدار (در صورت نیاز)','cfg-value',c.value||'')+'<div class="help">مثال: events / Reg_Started / NationalCode / خالی باشد. مقدار خالی یعنی ردیفی با value برابر NULL یا رشته خالی وجود دارد.</div>';
 if(n.type==='condition')html+=field('نام رویداد (name)','cfg-event',c.event||'')+field('sign اختیاری','cfg-sign',c.sign||'')+field('کلید داخل رویداد (key، اختیاری)','cfg-key',c.key||'')+selectField('عملگر مقدار رویداد','cfg-operator',c.operator||'exists',ops)+field('مقدار (در صورت نیاز)','cfg-value',c.value||'')+selectField('محدوده زمانی','cfg-scope',c.scope||'ever',eventScope);
-if(n.type==='attribute')html+=selectField('بخش دیتابیس (section)','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('نام رویداد / مجموعه (name، اختیاری)','cfg-name',c.name||'','text','maxlength="50"')+field('کلید (key)','cfg-key',c.key||'')+field('sign اختیاری','cfg-sign',c.sign||'')+selectField('عملگر','cfg-operator',c.operator||'exists',ops)+field('مقدار','cfg-value',c.value||'');
+if(n.type==='attribute')html+=selectField('بخش دیتابیس (section)','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('نام رویداد / مجموعه (name، اختیاری)','cfg-name',c.name||'','text','maxlength="50"')+field('کلید (key، برای رویداد اختیاری)','cfg-key',c.key||'')+field('sign اختیاری','cfg-sign',c.sign||'')+selectField('عملگر','cfg-operator',c.operator||'exists',ops)+field('مقدار','cfg-value',c.value||'');
 if(n.type==='split')html+=field('درصد تخصیص به مسیر A','cfg-percent',c.percent??50,'number','min="0" max="100"');
 if(n.type==='slot')html+=field('از ساعت','cfg-from',c.from||'10:00','time')+field('تا ساعت','cfg-to',c.to||'15:00','time')+`<div class="help">روزهای مجاز به وقت جرنی</div><div class="days">${days.map((day,i)=>`<label><input type="checkbox" data-day="${i}" ${(c.days||[]).includes(i)?'checked':''}>${day}</label>`).join('')}</div>`;
 if(n.type==='delay'||n.type==='wait_event')html+=field('مدت انتظار (ساعت)','cfg-hours',c.hours??24,'number','min="1" max="2160"');
@@ -39,6 +94,7 @@ if(n.type==='sms'){
    +selectField('پنل پیامک','cfg-provider_id',String(c.provider_id||0),[['0','پنل پیش‌فرض سیستم'],...(ui.smsProviders||[]).map(p=>[String(p.id),p.name])])
    +field('Attribute شماره گیرنده (receptor)','cfg-receptor_attribute',c.receptor_attribute||'phone','text','dir="ltr" maxlength="50"')
    +textField('متن پیامک (message)','cfg-message',c.message||'',6)
+   +selectField('معیار موفقیت','cfg-success_mode',c.success_mode||'accepted', [['accepted','پذیرش توسط پنل پیامک'],['delivered','تحویل واقعی به گیرنده (استعلام وضعیت)']])
    +'<div class="help">متغیرها: {{firstName}}، {{lastName}}، {{phone}}، {{userId}} یا نام هر Attribute انگلیسی ذخیره‌شده. در زمان ارسال از دیتابیس خوانده می‌شوند. شماره گیرنده از Attribute مشخص‌شده در همین گره خوانده می‌شود؛ تنظیمات پنل فقط sender و API-KEY را نگه می‌دارد.</div>'
    +'<div class="help"><a href="'+esc(ui.smsProvidersUrl||'#')+'" target="_blank" rel="noopener noreferrer">مدیریت پنل‌ها و معرفی پارامترهای message / sender / receptor / API-KEY</a></div>'
    +'</div><div id="sms-legacy-settings">'
@@ -78,10 +134,13 @@ if(n.type==='api'){
   +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}} و Attributeهای کاربر مثل {{phone}}. فرمت WebEngage مثل user["system"]["phone"] پشتیبانی نمی‌شود. API فقط به دامنه عمومی HTTPS روی پورت 443 متصل می‌شود؛ HTTP با پورت سفارشی یا IP خصوصی مسدود است.</div>';
 }
 if(n.type==='exit')html+='<div class="muted-box">هنگام رسیدن کاربر به این مرحله، اجرای او پایان می‌یابد.</div>';
+if(['sms','api','email','webpush'].includes(n.type)) {
+ html+=selectField('رفتار در شکست قطعی','cfg-failure_policy',c.failure_policy||'hold', [['hold','توقف برای بررسی و Retry'],['branch','ادامه از خروجی Failure']]);
+}
 if(['sms','email','webpush'].includes(n.type))html+='<button type="button" class="btn jb-preview-launch" id="preview-node">◉ پیش‌نمایش '+(n.type==='sms'?'پیامک':n.type==='email'?'ایمیل':'وب‌پوش نوتیفیکیشن')+'</button>';
 if(!readonly)html+='<button class="btn danger" id="delete-node" style="width:100%;margin-top:15px">حذف گره</button>';
 box.innerHTML=html;
-const map={'cfg-section':'section','cfg-name':'name','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-delivery_mode':'delivery_mode','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body','cfg-recipient_attribute':'recipient_attribute','cfg-subject':'subject','cfg-format':'format','cfg-title':'title','cfg-ttl':'ttl','cfg-button_title':'button_title','cfg-button_url':'button_url'};
+const map={'cfg-section':'section','cfg-name':'name','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-delivery_mode':'delivery_mode','cfg-success_mode':'success_mode','cfg-failure_policy':'failure_policy','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body','cfg-recipient_attribute':'recipient_attribute','cfg-subject':'subject','cfg-format':'format','cfg-title':'title','cfg-ttl':'ttl','cfg-button_title':'button_title','cfg-button_url':'button_url'};
 for(const [input,key] of Object.entries(map)){const el=$(input);if(!el)continue;el.disabled=readonly;el.addEventListener('input',()=>{c[key]=['hours','percent','provider_id','ttl'].includes(key)?Number(el.value):el.value;dirty=true;const nbody=$('node-'+n.id)?.querySelector('.node-body');if(nbody)nbody.textContent=describe(n)})}
 if(n.type==='sms'){
  const modeInput=$('cfg-delivery_mode');
@@ -259,8 +318,26 @@ $('save')?.addEventListener('click',async()=>{
 });
 $('edit-title')?.addEventListener('input',()=>dirty=true);
 $('refresh')?.addEventListener('click',()=>location.reload());
-document.querySelectorAll('.palette-entry').forEach(item=>{item.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-jb-node',item.dataset.type);e.dataTransfer.effectAllowed='copy'});item.addEventListener('click',()=>{const v=$('viewport');addNode(item.dataset.type,v.scrollLeft+300,v.scrollTop+220)})});
-$('viewport').addEventListener('dragover',e=>e.preventDefault());$('viewport').addEventListener('drop',e=>{e.preventDefault();const type=e.dataTransfer.getData('text/x-jb-node');if(!Object.hasOwn(ports,type))return;const b=$('board').getBoundingClientRect();addNode(type,e.clientX-b.left,e.clientY-b.top)});
+$('jb-zoom-in')?.addEventListener('click',()=>setZoom(zoom*1.25));
+$('jb-zoom-out')?.addEventListener('click',()=>setZoom(zoom/1.25));
+$('jb-fit-all')?.addEventListener('click',fitNodes);
+const editorLayout=document.querySelector('.editor-layout');
+const fullscreenBtn=$('jb-expand-editor');
+function toggleEditor(expand){
+  editorLayout?.classList.toggle('jb-editor-expanded',expand);
+  document.body.classList.toggle('jb-editor-fullscreen',expand);
+  if(fullscreenBtn){fullscreenBtn.setAttribute('aria-pressed',expand?'true':'false');
+    fullscreenBtn.textContent=expand?'بازگشت به حالت عادی':'بوم تمام‌صفحه';}
+  requestAnimationFrame(()=>{sizeBoard();});
+}
+fullscreenBtn?.addEventListener('click',()=>toggleEditor(!editorLayout.classList.contains('jb-editor-expanded')));
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&editorLayout?.classList.contains('jb-editor-expanded')&&!document.body.classList.contains('jb-preview-open'))toggleEditor(false);
+});
+window.addEventListener('resize',()=>sizeBoard());
+
+document.querySelectorAll('.palette-entry').forEach(item=>{item.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-jb-node',item.dataset.type);e.dataTransfer.effectAllowed='copy'});item.addEventListener('click',()=>{const v=$('viewport');addNode(item.dataset.type,(v.scrollLeft+v.clientWidth/2)/zoom,(v.scrollTop+v.clientHeight/2)/zoom)})});
+$('viewport').addEventListener('dragover',e=>e.preventDefault());$('viewport').addEventListener('drop',e=>{e.preventDefault();const type=e.dataTransfer.getData('text/x-jb-node');if(!Object.hasOwn(ports,type))return;const b=$('board').getBoundingClientRect();addNode(type,(e.clientX-b.left)/zoom,(e.clientY-b.top)/zoom)});
 // Four-way canvas movement: normal wheel = vertical, trackpad = both axes,
 // Shift+wheel = horizontal, drag an empty area = pan. Never interfere with node drag/ports.
 const canvas=$('viewport');
@@ -292,5 +369,5 @@ canvas.addEventListener('pointerup',finishPan);
 canvas.addEventListener('pointercancel',finishPan);
 canvas.addEventListener('lostpointercapture',finishPan);
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
-redraw();$('viewport').scrollLeft=100;$('viewport').scrollTop=0;
+redraw();fitNodes();
 })();

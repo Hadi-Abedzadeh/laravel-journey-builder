@@ -31,7 +31,10 @@ final class ManualEnrollment
         if ($flow->enrollment_mode !== 'manual') throw new RuntimeException('Set journey enrollment mode to manual before adding one test user.');
         $graph = json_decode($flow->graph_json, true, 512, JSON_THROW_ON_ERROR);
         $trigger = collect($graph['nodes'] ?? [])->firstWhere('type', 'trigger');
-        if (!$trigger || empty($trigger['config']['key'])) throw new RuntimeException('Journey trigger is not configured.');
+        if (!$trigger || (empty($trigger['config']['key']) &&
+            !(($trigger['config']['section'] ?? '') === 'events' && !empty($trigger['config']['name'])))) {
+            throw new RuntimeException('Journey trigger is not configured.');
+        }
         $source = $db->table(config('journey_builder.source_table','member_data'));
         $exists = TypedWhere::eq($source, 'userId', $userId, 100)->exists();
         if (!$exists) throw new RuntimeException('userId was not found in the source table.');
@@ -39,11 +42,14 @@ final class ManualEnrollment
         $sourceQuery = TypedWhere::eq(
             TypedWhere::eq($db->table(config('journey_builder.source_table','member_data')), 'userId', $userId, 100),
             'section', (string)$cfg['section'], 20
-        )->where('key', (string)$cfg['key']);
+        );
+        if (!empty($cfg['key'])) $sourceQuery->where('key', (string)$cfg['key']);
         if (trim((string)($cfg['name'] ?? '')) !== '') $sourceQuery->where('name', $cfg['name']);
         if (!empty($cfg['sign'])) TypedWhere::eq($sourceQuery, 'sign', (string)$cfg['sign'], 30);
         $row = $sourceQuery->orderByDesc('updated_at')->orderByDesc('id')->first(['value']);
-        $matches = $row !== null && TriggerMatcher::matches($row->value, (string)($cfg['operator'] ?? 'exists'), (string)($cfg['value'] ?? ''));
+        $matches = $row !== null && (
+            empty($cfg['key']) || TriggerMatcher::matches($row->value, (string)($cfg['operator'] ?? 'exists'), (string)($cfg['value'] ?? ''))
+        );
         $existing = TypedWhere::eq($db->table('jb_runs')->where('flow_id', $flowId), 'user_id', $userId, 100)->exists();
         $digest = app(RunRetention::class)->userDigest($userId);
         if ($digest !== null) {

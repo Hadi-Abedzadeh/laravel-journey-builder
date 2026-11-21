@@ -109,7 +109,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
     public function monitoring(Request $request)
     {
         $filters=$request->validate([
-            'command'=>'nullable|in:enroll,tick,sms-dispatch,email-dispatch,webpush-dispatch',
+            'command'=>'nullable|in:enroll,tick,sms-dispatch,sms-status,email-dispatch,webpush-dispatch',
             'status'=>'nullable|in:running,success,partial,failed',
             'flow'=>'nullable|integer|min:1',
         ]);
@@ -124,7 +124,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         if (!empty($filters['status'])) TypedWhere::eq($q,'status',$filters['status'],16);
         $commandRows=$q->orderByDesc('id')->paginate(30)->withQueryString();
         $last=[];
-        foreach (['enroll','tick','sms-dispatch','email-dispatch','webpush-dispatch'] as $command) {
+        foreach (['enroll','tick','sms-dispatch','sms-status','email-dispatch','webpush-dispatch'] as $command) {
             $last[$command]=$db->table('jb_command_runs')->where('command_name',$command)->orderByDesc('id')->first();
         }
         $due=TypedWhere::oneOf(TypedWhere::eq($db->table('jb_runs as r')
@@ -363,6 +363,10 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
                     }
                     if (!config('journey_builder.sms.managed_enabled', false)) {
                         throw ValidationException::withMessages(['status'=>'ارسال پنل‌های پیامکی در تنظیمات سرور غیرفعال است.']);
+                    }
+                    if (($smsConfig['success_mode'] ?? 'accepted') === 'delivered' &&
+                        !config('journey_builder.sms.receipt_poll_enabled', false)) {
+                        throw ValidationException::withMessages(['status'=>'برای معیار «تحویل واقعی»، ابتدا SMS receipt polling را فعال کنید.']);
                     }
                     $providerQ = $db->table('jb_sms_providers')->where('is_enabled',1)->whereNull('deleted_at');
                     $selectedId = (int)($smsConfig['provider_id'] ?? 0);

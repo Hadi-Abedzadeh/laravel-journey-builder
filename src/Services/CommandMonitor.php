@@ -25,7 +25,7 @@ final class CommandMonitor
             $result = $callback();
             $processed = $name === 'enroll'
                 ? array_sum(array_map(static fn($r)=>(int)($r['scanned']??0),$result))
-                : (int)($result[$name==='sms-dispatch'?'claimed':'processed'] ?? 0);
+                : (int)($result[match ($name) {'sms-dispatch'=>'claimed', 'sms-status'=>'checked', default=>'processed'}] ?? 0);
             $failed = (int)($result['failed'] ?? 0);
             if ($id) $db->table('jb_command_runs')->where('id',$id)->update([
                 'status'=>$failed ? 'partial' : 'success', 'finished_at'=>now('UTC'),
