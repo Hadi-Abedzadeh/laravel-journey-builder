@@ -12,7 +12,7 @@ final class Definition
         'wait_event' => ['event', 'timeout'], 'split' => ['a', 'b'],
         'sms' => ['success', 'failure'], 'api' => ['success', 'failure'],
         'email' => ['success', 'failure'], 'webpush' => ['success', 'failure'],
-        'onsite' => ['success', 'failure'], 'exit' => [],
+        'onsite' => ['success', 'failure'], 'wait_onsite' => ['viewed', 'timeout'], 'exit' => [],
     ];
 
     public static function blank(): array
@@ -149,11 +149,22 @@ final class Definition
                 }
             }
             if ($type === 'onsite') {
-                if (array_diff(array_keys($cfg), ['onsite_name', 'failure_policy'])) self::fail('تنظیمات ناشناخته گره آنسایت.');
-                self::short($cfg['onsite_name'] ?? '', 180, 'onsite name');
+                // onsite_name is accepted ONLY for old saved flows (migration compatibility).
+                if (array_diff(array_keys($cfg), ['onsite_id', 'onsite_name', 'failure_policy'])) self::fail('تنظیمات ناشناخته گره آنسایت.');
+                self::short($cfg['onsite_id'] ?? '', 24, 'onsite id');
+                self::short($cfg['onsite_name'] ?? '', 180, 'legacy onsite name');
+                if (($cfg['onsite_id'] ?? '') !== '' && !OnsiteMongoService::isValidOnsiteId((string)$cfg['onsite_id'])) self::fail('شناسه آنسایت باید ObjectId معتبر باشد.');
                 if (!in_array($cfg['failure_policy'] ?? 'hold', ['hold', 'branch'], true)) self::fail('سیاست شکست آنسایت نامعتبر است.');
-                if ($publish && trim((string)($cfg['onsite_name'] ?? '')) === '') self::fail('نام آنسایت را انتخاب کنید.');
-                if ($publish && !config('journey_builder.onsite.enabled', false)) self::fail('قبل از فعال‌سازی جرنی، سرویس Onsite را در تنظیمات فعال و تست کنید.');
+                if ($publish && ($cfg['onsite_id'] ?? '') === '' && trim((string)($cfg['onsite_name'] ?? '')) === '') self::fail('آنسایت را از فهرست انتخاب کنید.');
+                if ($publish && (string)config('journey_builder.onsite.mongo.uri', '') === '') self::fail('ابتدا اتصال MongoDB را تنظیم کنید.');
+            }
+            if ($type === 'wait_onsite') {
+                if (array_diff(array_keys($cfg), ['onsite_id', 'days'])) self::fail('تنظیمات ناشناخته انتظار آنسایت.');
+                self::short($cfg['onsite_id'] ?? '', 24, 'onsite id');
+                if (($cfg['onsite_id'] ?? '') !== '' && !OnsiteMongoService::isValidOnsiteId((string)$cfg['onsite_id'])) self::fail('شناسه آنسایت در انتظار نامعتبر است.');
+                if ($publish && ($cfg['onsite_id'] ?? '') === '') self::fail('برای انتظار، آنسایت موردنظر را انتخاب کنید.');
+                if (!is_int($cfg['days'] ?? null) || (int)$cfg['days'] < 1 || (int)$cfg['days'] > 90) self::fail('مدت انتظار مشاهده آنسایت باید بین ۱ تا ۹۰ روز باشد.');
+                if ($publish && (string)config('journey_builder.onsite.mongo.uri', '') === '') self::fail('ابتدا اتصال MongoDB را تنظیم کنید.');
             }
             if ($type === 'api') {
                 self::short($cfg['url'] ?? '', 1000, 'API URL');

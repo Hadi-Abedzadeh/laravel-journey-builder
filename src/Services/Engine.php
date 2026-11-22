@@ -237,6 +237,38 @@ final class Engine
                         return;
                     }
                     break;
+                case 'wait_onsite':
+                    // A separate waiting tool, so the Onsite assignment itself never delays execution.
+                    // Poll at most once per minute until the configured number of days passes.
+                    if (!$run->wait_started_at) {
+                        $this->write($run, ['wait_started_at' => $this->stamp()]);
+                    }
+                    $started = CarbonImmutable::parse($run->wait_started_at, 'UTC');
+                    $deadline = $started->addDays((int)$cfg['days']);
+                    try {
+                        $status = app(OnsiteMongoService::class)->displayStatus(
+                            (string)$run->user_id, (string)$cfg['onsite_id']
+                        );
+                    } catch (\Throwable $e) {
+                        // Avoid saving a credential-bearing MongoDB URI in jb_runs.last_error.
+                        throw new \RuntimeException('Cannot check MongoDB onsite state; inspect Journey Readiness and user mapping.', 0, $e);
+                    }
+                    if ($status === 'viewed') {
+                        $next = 'viewed';
+                    } elseif ($status === 'missing') {
+                        // Never pretend an onsite was viewed if Mongo data is absent.
+                        throw new \RuntimeException('No Onsite assignment exists for this user and onsite ID.');
+                    } elseif ($this->now()->greaterThanOrEqualTo($deadline)) {
+                        $next = 'timeout';
+                    } else {
+                        $poll = $this->now()->addMinute();
+                        $this->write($run, [
+                            'state' => 'waiting',
+                            'next_run_at' => $this->stamp($poll->lessThan($deadline) ? $poll : $deadline),
+                        ]);
+                        return;
+                    }
+                    break;
                 case 'email':
                 case 'webpush':
                     $result=app(ChannelQueue::class)->enqueueOrStatus($run,$flow,$cfg,$node['type']);
@@ -300,7 +332,7 @@ final class Engine
                     break;
                 case 'onsite':
                     try {
-                        app(OnsiteMongoService::class)->assign((string)$run->user_id, (string)($cfg['onsite_name'] ?? ''));
+                        app(OnsiteMongoService::class)->assign((string)$run->user_id, (string)($cfg['onsite_id'] ?? $cfg['onsite_name'] ?? ''));
                         $next = 'success'; // Means assignment was written; NOT that user viewed the Onsite.
                     } catch (\Throwable $e) {
                         // Driver errors may contain MongoDB URIs with credentials; never persist them.

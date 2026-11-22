@@ -1,3 +1,5 @@
+> New: see [README_BETA15_FA.md](README_BETA15_FA.md) for fixed MongoDB collections and Onsite view waiting.
+
 <!-- Monitoring update v0.3.4-beta.4 -->
 > v0.3.4-beta.4: New monitoring dashboard (`/journeys/monitoring`), reversible soft delete, and revision-safe editing of paused journeys. Run migration `2026_11_09_150000_add_journey_monitoring_and_revision_tables.php` before using the updated dashboard. See `README_V3_5_FA.md`.
 

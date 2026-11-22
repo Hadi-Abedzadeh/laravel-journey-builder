@@ -63,7 +63,7 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $onsites=[];
         $onsitesError=null;
         try {
-            $onsites=app(\OpenJourney\LaravelJourneyBuilder\Services\OnsiteMongoService::class)->onsiteNames();
+            $onsites=app(\OpenJourney\LaravelJourneyBuilder\Services\OnsiteMongoService::class)->onsiteOptions();
         } catch (\Throwable $e) {
             $onsitesError='فهرست آنسایت در دسترس نیست؛ وضعیت اتصال MongoDB را در Readiness بررسی کنید.';
         }

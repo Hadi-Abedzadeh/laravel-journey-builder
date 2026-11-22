@@ -1,12 +1,12 @@
 <!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token() }}"><title>ویرایش جرنی | {{ $flow->title }}</title><link rel="stylesheet" href="{{ asset('vendor/journey-builder/style.css') }}">
-<link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}?v=3.4.14">
+<link rel="stylesheet" href="{{ asset('vendor/journey-builder/journey-builder-pro.css') }}?v=3.4.15">
 </head><body>
 @include('journey-builder::partials.nav', ['active' => 'journeys'])
 <div class="editor-layout"><aside class="side"><h3>جعبه ابزار · Drag & Drop</h3><p class="help">Shift + چرخ موس: حرکت افقی · Alt + چرخ موس: حرکت عمودی</p>
 <div class="palette"><div class="palette-label">ورود و شرط‌ها</div>
 @foreach([['trigger','ورود از منبع داده','▶','#3182ee'],['condition','شرط وجود رویداد','◇','#e0a434'],['attribute','شرط ویژگی کاربر','◈','#e7a238'],['split','تقسیم درصدی مسیر','⑂','#9d6ddd']] as $item)<div class="palette-entry" draggable="true" data-type="{{ $item[0] }}" style="--accent:{{ $item[3] }}"><span class="iconbox">{{ $item[2] }}</span>{{ $item[1] }}</div>@endforeach
 <div class="palette-label">زمان‌بندی و انتظار</div>
-@foreach([['slot','بازه زمانی','◷','#ed9563'],['delay','تأخیر چندساعته','◴','#eb9463'],['wait_event','انتظار برای رویداد','⌛','#cf6d75']] as $item)<div class="palette-entry" draggable="true" data-type="{{ $item[0] }}" style="--accent:{{ $item[3] }}"><span class="iconbox">{{ $item[2] }}</span>{{ $item[1] }}</div>@endforeach
+@foreach([['slot','بازه زمانی','◷','#ed9563'],['delay','تأخیر چندساعته','◴','#eb9463'],['wait_event','انتظار برای رویداد','⌛','#cf6d75'],['wait_onsite','انتظار مشاهده آنسایت','◴','#d67d6e']] as $item)<div class="palette-entry" draggable="true" data-type="{{ $item[0] }}" style="--accent:{{ $item[3] }}"><span class="iconbox">{{ $item[2] }}</span>{{ $item[1] }}</div>@endforeach
 <div class="palette-label">عملیات و پایان</div>
 @foreach([['sms','ارسال پیامک','✉','#14a985'],['email','ارسال ایمیل','✉','#7b61e8'],['webpush','وب‌پوش نوتیفیکیشن','◉','#0e9fbd'],['api','درخواست HTTP API','↗','#3677d6'],['onsite','افزودن آنسایت','▣','#10a088'],['exit','خروج از جرنی','■','#8795a8']] as $item)<div class="palette-entry" draggable="true" data-type="{{ $item[0] }}" style="--accent:{{ $item[3] }}"><span class="iconbox">{{ $item[2] }}</span>{{ $item[1] }}</div>@endforeach</div>
 
@@ -32,5 +32,5 @@
 </div>
 <div class="toast" id="toast" role="status"></div>
 @php($ui=['id'=>$flow->id,'readonly'=>!$canEdit,'graph'=>json_decode($flow->graph_json,true),'saveUrl'=>route('jb.save',$flow->id),'secretNodeIds'=>$secretNodeIds,'tokenUrlPattern'=>route('jb.token',['id'=>$flow->id,'nodeId'=>'__NODE__']),'smsProviders'=>$smsProviders,'emailProviders'=>$emailProviders,'pushProviders'=>$pushProviders,'onsites'=>$onsites,'onsitesError'=>$onsitesError,'smsProvidersUrl'=>route('jb.sms.providers'),'emailProvidersUrl'=>route('jb.channels.index','email'),'pushProvidersUrl'=>route('jb.channels.index','webpush')])
-<script>window.JB_UI={{ \Illuminate\Support\Js::from($ui) }};</script><script src="{{ asset('vendor/journey-builder/builder.js') }}?v=3.4.14" defer></script>@include('journey-builder::partials.footer')
+<script>window.JB_UI={{ \Illuminate\Support\Js::from($ui) }};</script><script src="{{ asset('vendor/journey-builder/builder.js') }}?v=3.4.15" defer></script>@include('journey-builder::partials.footer')
 </body></html>

@@ -2,33 +2,35 @@
 
 namespace OpenJourney\LaravelJourneyBuilder\Services;
 
+use MongoDB\BSON\ObjectId;
 use RuntimeException;
 
-/** Read MongoDB Onsite names and idempotently assign one to an existing user. */
+/**
+ * Fixed MongoDB schema:
+ *  - database: onsite_journey (connection configuration)
+ *  - onsite collection: onsites, {_id:ObjectId, onsite_name:string}
+ *  - user collection: users, {_id:ObjectId, userId:string, onsite_journey:{"<onsiteId>":bool}}
+ *
+ * We deliberately never create user documents. Mapping member_data.userId to the
+ * existing Mongo users.userId MUST be confirmed by the host application.
+ */
 final class OnsiteMongoService
 {
-    private function settings(): array
-    {
-        return (array) config('journey_builder.onsite.mongo', []);
-    }
-
-    private function identifier(string $key): string
-    {
-        $value = (string)($this->settings()[$key] ?? '');
-        if (!preg_match('/^[_A-Za-z][_A-Za-z0-9]{0,79}$/D', $value)) {
-            throw new RuntimeException('Invalid MongoDB mapping setting: '.$key);
-        }
-        return $value;
-    }
+    private const DATABASE = 'onsite_journey';
+    private const ONSITES = 'onsites';
+    private const USERS = 'users';
+    private const NAME = 'onsite_name';
+    private const ASSIGNMENTS = 'onsite_journey';
+    private const EXTERNAL_USER_ID = 'userId';
 
     public function client(): \MongoDB\Client
     {
         if (!extension_loaded('mongodb') || !class_exists(\MongoDB\Client::class)) {
-            throw new RuntimeException('Install PHP ext-mongodb and composer package mongodb/mongodb.');
+            throw new RuntimeException('Install PHP ext-mongodb and mongodb/mongodb Composer library.');
         }
-        $uri = (string)($this->settings()['uri'] ?? '');
+        $uri = (string) config('journey_builder.onsite.mongo.uri', '');
         if ($uri === '' || !preg_match('~^mongodb(?:\+srv)?://~i', $uri)) {
-            throw new RuntimeException('MongoDB URI is missing or invalid in journey_builder.onsite.mongo.uri.');
+            throw new RuntimeException('MongoDB URI is missing or invalid.');
         }
         return new \MongoDB\Client($uri, [
             'serverSelectionTimeoutMS' => 2500,
@@ -38,57 +40,127 @@ final class OnsiteMongoService
 
     public function database(): \MongoDB\Database
     {
-        return $this->client()->selectDatabase($this->identifier('database'));
+        return $this->client()->selectDatabase(self::DATABASE);
     }
 
-    /** @return list<string> */
+    public static function isValidOnsiteId(string $id): bool
+    {
+        return (bool) preg_match('/^[a-fA-F0-9]{24}$/D', $id);
+    }
+
+    /** @return list<array{id: string, name: string}> */
+    public function onsiteOptions(): array
+    {
+        $cursor = $this->database()->selectCollection(self::ONSITES)->find(
+            [self::NAME => ['$type' => 'string']],
+            ['projection' => ['_id' => 1, self::NAME => 1], 'limit' => 2100]
+        );
+        $options = [];
+        foreach ($cursor as $doc) {
+            $id = (string) ($doc['_id'] ?? '');
+            $name = $doc[self::NAME] ?? null;
+            if (!self::isValidOnsiteId($id) || !is_string($name) || trim($name) === '') continue;
+            $options[] = ['id' => strtolower($id), 'name' => trim($name)];
+        }
+        usort($options, static fn($a, $b) => strnatcasecmp($a['name'], $b['name']));
+        return array_slice($options, 0, 2000);
+    }
+
+    /** Legacy helper for existing callers, now only used for display. */
     public function onsiteNames(): array
     {
-        $field=$this->identifier('onsite_name_field');
-        $result=$this->database()->selectCollection($this->identifier('onsites_collection'))->distinct($field);
-        $names=[];
-        foreach ($result as $value) {
-            if (is_string($value) && trim($value)!=='') $names[]=trim($value);
-        }
-        $names=array_values(array_unique($names));
-        sort($names, SORT_NATURAL);
-        return array_slice($names, 0, 2000);
+        return array_values(array_unique(array_column($this->onsiteOptions(), 'name')));
     }
 
-    public function assign(string $userId, string $onsiteName): void
+    /** Backward compatibility for old graphs that persisted an onsite_name. */
+    public function resolveId(string $idOrName): string
     {
-        if (!config('journey_builder.onsite.enabled', false)) {
-            throw new RuntimeException('Onsite assignment is disabled in journey_builder configuration.');
+        if (self::isValidOnsiteId($idOrName)) {
+            $id = strtolower($idOrName);
+            $doc = $this->database()->selectCollection(self::ONSITES)->findOne(
+                ['_id' => new ObjectId($id)], ['projection' => ['_id' => 1, self::NAME => 1]]
+            );
+            if (!$doc || !is_string($doc[self::NAME] ?? null) || trim($doc[self::NAME]) === '') {
+                throw new RuntimeException('Selected Onsite does not exist or has no onsite_name.');
+            }
+            return $id;
         }
-        if ($userId==='' || strlen($userId)>100 || trim($onsiteName)==='' || mb_strlen($onsiteName)>180) {
-            throw new RuntimeException('Invalid user ID or onsite name.');
-        }
-        $db=$this->database();
-        $onsiteField=$this->identifier('onsite_name_field');
-        // Check Mongo source data rather than trusting a browser-provided label.
-        $found=$db->selectCollection($this->identifier('onsites_collection'))->findOne(
-            [$onsiteField=>$onsiteName], ['projection'=>['_id'=>1]]
-        );
-        if (!$found) throw new RuntimeException('Selected onsite does not exist in MongoDB.');
+        // Migration compatibility only; reject duplicate labels rather than choosing the wrong record.
+        $name = trim($idOrName);
+        if ($name === '') throw new RuntimeException('Onsite ID is missing.');
+        $matches = $this->database()->selectCollection(self::ONSITES)
+            ->find([self::NAME => $name], ['projection' => ['_id' => 1], 'limit' => 2]);
+        $ids = [];
+        foreach ($matches as $doc) $ids[] = (string) $doc['_id'];
+        if (count($ids) !== 1) throw new RuntimeException('Onsite name is missing or ambiguous; select its ObjectId in the editor.');
+        return strtolower($ids[0]);
+    }
 
-        $idField=$this->identifier('user_id_field');
-        $assignmentsField=(string)($this->settings()['assignments_field'] ?? '');
-        // Supports an explicit nested array such as `onsite_journey.onsites`.
-        if (!preg_match('/^[_A-Za-z][_A-Za-z0-9]{0,79}(?:\.[_A-Za-z][_A-Za-z0-9]{0,79}){0,3}$/D', $assignmentsField)) {
-            throw new RuntimeException('Invalid MongoDB assignments field mapping.');
+    private function userIdFromSql(string $userId): ObjectId
+    {
+        if ($userId === '' || strlen($userId) > 100) {
+            throw new RuntimeException('Invalid Journey userId.');
         }
-        if ($idField===$assignmentsField || in_array($assignmentsField, ['_id', $idField], true)) {
-            throw new RuntimeException('Invalid user onsite assignment field mapping.');
-        }
-        // $addToSet prevents duplicate onsite assignment on worker retry/crash.
-        // No other user fields are replaced. Default upsert=false prevents accidental partial user records.
-        $result=$db->selectCollection($this->identifier('users_collection'))->updateOne(
-            [$idField=>$userId],
-            ['$addToSet'=>[$assignmentsField=>$onsiteName]],
-            ['upsert'=>(bool)($this->settings()['create_user_if_missing'] ?? false)]
+        // An actual Mongo _id can be passed directly as its 24-digit hexadecimal string.
+        // Most SQL Server member_data.userId values are NOT ObjectIds; they need a
+        // verified matching users.userId property. Do not guess or upsert a user.
+        $filter = self::isValidOnsiteId($userId)
+            ? ['_id' => new ObjectId($userId)]
+            : [self::EXTERNAL_USER_ID => $userId];
+        $cursor = $this->database()->selectCollection(self::USERS)->find(
+            $filter, ['projection' => ['_id' => 1], 'limit' => 2]
         );
-        if ($result->getMatchedCount()===0 && $result->getUpsertedCount()===0) {
-            throw new RuntimeException('User does not exist in MongoDB users; enable upsert only after confirming its schema.');
+        $users = iterator_to_array($cursor, false);
+        if (count($users) !== 1 || !(($users[0]['_id'] ?? null) instanceof ObjectId)) {
+            throw new RuntimeException('Cannot uniquely map SQL userId to existing MongoDB users document. Confirm users.userId mapping.');
         }
+        return $users[0]['_id'];
+    }
+
+    public function assign(string $userId, string $onsiteId): void
+    {
+        $id = $this->resolveId($onsiteId);
+        $mongoUserId = $this->userIdFromSql($userId);
+        $path = self::ASSIGNMENTS . '.' . $id;
+
+        // Atomic idempotency: never reset a false (already viewed) flag to true
+        // on a worker retry / transient network error. This update is only for
+        // new onsite assignments not previously present on this user.
+        $collection = $this->database()->selectCollection(self::USERS);
+        $result = $collection->updateOne(
+            ['_id' => $mongoUserId, $path => ['$exists' => false]],
+            ['$set' => [$path => true]],
+            ['upsert' => false]
+        );
+        if ($result->getMatchedCount() === 0) {
+            // Existing true/false is an idempotent replay. Any other result is invalid.
+            $doc = $collection->findOne(['_id' => $mongoUserId], ['projection' => [$path => 1]]);
+            $flag = ($doc[self::ASSIGNMENTS] ?? null)[$id] ?? null;
+            if ($flag !== true && $flag !== false) {
+                throw new RuntimeException('Mongo Onsite assignment could not be verified.');
+            }
+        }
+        // If already false, the Onsite frontend owns the final state: never re-arm it on retry.
+    }
+
+    /** @return 'pending'|'viewed'|'missing' */
+    public function displayStatus(string $userId, string $onsiteId): string
+    {
+        if (!self::isValidOnsiteId($onsiteId)) {
+            throw new RuntimeException('Select a valid MongoDB onsite ObjectId for the waiting node.');
+        }
+        $user = $this->userIdFromSql($userId);
+        $id = strtolower($onsiteId);
+        $path = self::ASSIGNMENTS . '.' . $id;
+        $doc = $this->database()->selectCollection(self::USERS)->findOne(
+            ['_id' => $user], ['projection' => [$path => 1]]
+        );
+        if (!$doc) throw new RuntimeException('Mongo user disappeared during onsite wait.');
+        $data = $doc[self::ASSIGNMENTS] ?? null;
+        $value = $data[$id] ?? null;
+        // Nested BSONDocument may be ArrayAccess; PHP arrays are also supported.
+        if ($value === false) return 'viewed';
+        if ($value === true) return 'pending';
+        return 'missing';
     }
 }

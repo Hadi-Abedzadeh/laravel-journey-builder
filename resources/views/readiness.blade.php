@@ -10,5 +10,5 @@
 <section class="jb-ready-item {{ $check['status'] }}"><h3>{{ $check['label'] }}</h3><span class="badge {{ $check['status'] === 'ok' ? 'active' : 'failed' }}">{{ ['ok'=>'متصل','error'=>'خطا','warning'=>'هشدار','not_configured'=>'تنظیم نشده'][$check['status']]??$check['status'] }}</span><p>{{ $check['detail'] }}</p><small>{{ $check['elapsed_ms'] }} ms</small></section>
 @endforeach
 </div>
-<div class="card" style="margin-top:20px"><strong>وضعیت سرویس Onsite:</strong> {{ config('journey_builder.onsite.enabled',false) ? 'فعال' : 'غیرفعال (ایمن)' }} <p class="subtle">MongoDB Readiness فقط اتصال و وجود Collectionها را بررسی می‌کند؛ ساختار فیلدهای سند کاربران باید پیش از فعال‌کردن ارسال Onsite تأیید شود.</p></div></main>
+<div class="card" style="margin-top:20px"><strong>وضعیت سرویس Onsite:</strong> {{ config('journey_builder.onsite.mongo.uri') ? 'اتصال تنظیم شده' : 'اتصال تنظیم نشده' }} <p class="subtle">MongoDB Readiness فقط اتصال و وجود Collectionها را بررسی می‌کند؛ پیش از اجرای عملیات روی کاربران واقعی، ارتباط member_data.userId با سند users باید تأیید شود.</p></div></main>
 @include('journey-builder::partials.footer')</body></html>

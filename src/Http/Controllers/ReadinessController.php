@@ -41,8 +41,7 @@ final class ReadinessController extends Controller
                 $db=app(OnsiteMongoService::class)->database();
                 $db->command(['ping'=>1])->toArray();
                 $collections=iterator_to_array($db->listCollectionNames(),false);
-                $config=(array)config('journey_builder.onsite.mongo',[]);
-                $required=[(string)($config['onsites_collection']??'onsites'),(string)($config['users_collection']??'users')];
+                $required=['onsites','users'];
                 $missing=array_values(array_diff($required,$collections));
                 $checks['mongodb']=[
                     'status'=>$missing?'warning':'ok','label'=>'MongoDB',
