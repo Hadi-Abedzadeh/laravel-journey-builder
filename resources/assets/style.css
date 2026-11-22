@@ -42,3 +42,39 @@ body.jb-editor-fullscreen{overflow:hidden}
 .editor-layout.jb-editor-expanded .viewport{min-height:0;flex:1}
 .editor-layout.jb-editor-expanded .editor-toolbar{min-height:64px}
 @media(max-width:760px){.editor-toolbar{gap:6px}.jb-canvas-controls{width:100%;justify-content:center}.jb-canvas-controls .btn{font-size:10px;padding:5px 7px}}
+
+/* v0.3.4-beta.13 — vertical ports, virtual left-side padding, interactive minimap */
+.workspace{position:relative}
+.node .socket.input{
+  left:50%!important;top:-10px!important;right:auto!important;bottom:auto!important;
+  transform:translateX(-50%);
+}
+.node .socket.output{
+  right:auto!important;top:auto!important;bottom:-10px!important;
+  transform:translateX(-50%);
+}
+.node .socket.output .socket-label{
+  left:50%!important;right:auto!important;top:20px!important;
+  transform:translateX(-50%);
+  background:#fff;padding:1px 5px;border:1px solid #e8edf5;
+  border-radius:5px;color:#62728e;font-size:9px;z-index:6;
+}
+.node{margin-bottom:26px}
+.jb-minimap-panel{
+  position:absolute;bottom:18px;left:18px;z-index:50;
+  display:flex;flex-direction:column;gap:6px;
+  width:274px;padding:10px;
+  background:rgba(255,255,255,.96);border:1px solid #d8e2f0;
+  border-radius:13px;box-shadow:0 10px 30px rgba(20,35,69,.16);
+  direction:rtl;backdrop-filter:blur(8px);
+}
+.jb-minimap-header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.jb-minimap-header strong{font-size:11px;color:#42526c}
+.jb-minimap-header .btn{font-size:10px;padding:3px 8px}
+#jb-minimap{display:block;width:100%;height:160px;touch-action:none;cursor:crosshair;
+  border:1px solid #dce5f0;border-radius:8px;background:#f5f8fd}
+#jb-minimap:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
+.jb-minimap-hint{font-size:10px;line-height:1.8;color:#73849b}
+.jb-minimap-panel.is-collapsed{width:169px}
+.jb-minimap-panel.is-collapsed #jb-minimap,.jb-minimap-panel.is-collapsed .jb-minimap-hint{display:none}
+@media(max-width:760px){.jb-minimap-panel{left:8px;bottom:8px;width:188px;padding:6px}#jb-minimap{height:110px}.jb-minimap-hint{display:none}}

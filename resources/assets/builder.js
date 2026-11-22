@@ -16,19 +16,44 @@ let selectedId=null,source=null,dirty=false;
 // Large journeys should never be clipped by a fixed 2600 x 2200 board.
 const NODE_WIDTH=238, NODE_HEIGHT=142, BOARD_MARGIN=620, MAX_COORD=10000;
 const board=$('board'), boardShell=$('board-shell'), viewport=$('viewport');
+// Visual padding is independent of persisted graph coordinates: even a node at x=0
+// has a large area to its left for panning / placing other branches.
+let originX=1700, originY=340;
 let zoom=1, boardWidth=4800, boardHeight=4000;
+const visualX=n=>Number(n.x)+originX, visualY=n=>Number(n.y)+originY;
+const outputPercent=(index,count)=>count<=1?50:25+50*index/(count-1);
+// Graph coordinates remain non-negative for server-side validators. When a node is
+// moved to the virtual left/top of x=0, shift the saved coordinates (not its image)
+// and compensate through the visual origin. Existing node positions do not jump.
+function rebaseIfNeeded(x,y){
+  const dx=x<0?Math.ceil(180-x):0,dy=y<0?Math.ceil(140-y):0;
+  if(!dx&&!dy)return {x,y,dx:0,dy:0};
+  if(graph.nodes.some(n=>Number(n.x)+dx>MAX_COORD||Number(n.y)+dy>MAX_COORD)){
+    notify('محدوده مجاز گره‌ها پر شده؛ ابتدا گره‌های دورتر را نزدیک‌تر بیاورید.',true);
+    return null;
+  }
+  for(const node of graph.nodes){node.x=Number(node.x)+dx;node.y=Number(node.y)+dy;}
+  originX-=dx;originY-=dy;dirty=true;
+  return {x:x+dx,y:y+dy,dx,dy};
+}
 function measureNodes(){
   const ns=graph.nodes.filter(n=>Number.isFinite(Number(n.x))&&Number.isFinite(Number(n.y)));
   return {
-    minX:ns.length?Math.min(...ns.map(n=>Math.max(0,Number(n.x)))):0,
-    minY:ns.length?Math.min(...ns.map(n=>Math.max(0,Number(n.y)))):0,
-    maxX:ns.length?Math.max(...ns.map(n=>Math.min(MAX_COORD,Number(n.x)))):0,
-    maxY:ns.length?Math.max(...ns.map(n=>Math.min(MAX_COORD,Number(n.y)))):0,
+    minX:ns.length?Math.min(...ns.map(n=>visualX(n))):originX,
+    minY:ns.length?Math.min(...ns.map(n=>visualY(n))):originY,
+    maxX:ns.length?Math.max(...ns.map(n=>visualX(n))):originX,
+    maxY:ns.length?Math.max(...ns.map(n=>visualY(n))):originY,
   };
+}
+let minimapScheduled=false;
+function scheduleMinimap(){
+  if(minimapScheduled)return;
+  minimapScheduled=true;
+  requestAnimationFrame(()=>{minimapScheduled=false;drawMinimap()});
 }
 function sizeBoard(){
   const bounds=measureNodes();
-  // Keep space to the right/below the last node for its sockets and future branches.
+  // Reserve left and right margins without altering the stored node coordinates.
   boardWidth=Math.max(4800,Math.ceil((bounds.maxX+NODE_WIDTH+BOARD_MARGIN)/200)*200,
     Math.ceil((viewport.clientWidth/zoom+BOARD_MARGIN)/200)*200);
   boardHeight=Math.max(4000,Math.ceil((bounds.maxY+NODE_HEIGHT+BOARD_MARGIN)/200)*200,
@@ -42,39 +67,189 @@ function sizeBoard(){
   svg.setAttribute('viewBox',`0 0 ${boardWidth} ${boardHeight}`);
   svg.setAttribute('width',String(boardWidth));
   svg.setAttribute('height',String(boardHeight));
+  scheduleMinimap();
 }
-function setZoom(value,{focus=true}={}){
-  const next=Math.min(1.5,Math.max(0.02,Math.round(value*1000)/1000));
-  const centerX=(viewport.scrollLeft+viewport.clientWidth/2)/zoom;
-  const centerY=(viewport.scrollTop+viewport.clientHeight/2)/zoom;
+function setZoom(value,{focus=true,clientX=null,clientY=null}={}){
+  const next=Math.min(2.5,Math.max(0.02,Math.round(value*1000)/1000));
+  if(next===zoom)return;
+  const r=viewport.getBoundingClientRect();
+  const anchorX=clientX==null?viewport.clientWidth/2:Math.max(0,Math.min(viewport.clientWidth,clientX-r.left));
+  const anchorY=clientY==null?viewport.clientHeight/2:Math.max(0,Math.min(viewport.clientHeight,clientY-r.top));
+  const pointX=(viewport.scrollLeft+anchorX)/zoom,pointY=(viewport.scrollTop+anchorY)/zoom;
   zoom=next;
   sizeBoard();
-  if(focus){viewport.scrollLeft=centerX*zoom-viewport.clientWidth/2;
-    viewport.scrollTop=centerY*zoom-viewport.clientHeight/2;}
+  if(focus){viewport.scrollLeft=pointX*zoom-anchorX;viewport.scrollTop=pointY*zoom-anchorY;}
   const label=$('jb-zoom-label');if(label)label.textContent=Math.round(zoom*100)+'٪';
+  scheduleMinimap();
 }
 function fitNodes(){
-  if(!graph.nodes.length){setZoom(1,{focus:false});viewport.scrollLeft=0;viewport.scrollTop=0;return;}
+  if(!graph.nodes.length){setZoom(1,{focus:false});viewport.scrollLeft=originX*zoom-viewport.clientWidth/2;viewport.scrollTop=0;scheduleMinimap();return;}
   const {minX,minY,maxX,maxY}=measureNodes();
-  const contentW=maxX-minX+NODE_WIDTH+120, contentH=maxY-minY+NODE_HEIGHT+120;
-  const target=Math.min(1,Math.max(0.02,Math.min((viewport.clientWidth-48)/contentW,(viewport.clientHeight-48)/contentH)));
+  const contentW=maxX-minX+NODE_WIDTH+160,contentH=maxY-minY+NODE_HEIGHT+160;
+  const target=Math.min(1,Math.max(0.02,Math.min((viewport.clientWidth-32)/contentW,(viewport.clientHeight-32)/contentH)));
   setZoom(target,{focus:false});
-  viewport.scrollLeft=Math.max(0,(minX-60)*zoom);
-  viewport.scrollTop=Math.max(0,(minY-60)*zoom);
+  viewport.scrollLeft=(minX+maxX+NODE_WIDTH)*zoom/2-viewport.clientWidth/2;
+  viewport.scrollTop=(minY+maxY+NODE_HEIGHT)*zoom/2-viewport.clientHeight/2;
+  scheduleMinimap();
 }
 function focusNode(node){
-  viewport.scrollLeft=Math.max(0,(node.x+NODE_WIDTH/2)*zoom-viewport.clientWidth/2);
-  viewport.scrollTop=Math.max(0,(node.y+NODE_HEIGHT/2)*zoom-viewport.clientHeight/2);
+  viewport.scrollLeft=(visualX(node)+NODE_WIDTH/2)*zoom-viewport.clientWidth/2;
+  viewport.scrollTop=(visualY(node)+NODE_HEIGHT/2)*zoom-viewport.clientHeight/2;
+  scheduleMinimap();
 }
+// Small interactive bird's-eye map. It only reads the rendered graph; it never
+// modifies graph_json or makes any network requests.
+let minimapTransform=null;
+function drawMinimap(){
+  const canvas=$('jb-minimap');if(!canvas||canvas.closest('.jb-minimap-panel')?.classList.contains('is-collapsed'))return;
+  const rect=canvas.getBoundingClientRect();if(rect.width<1||rect.height<1)return;
+  const pixelRatio=Math.min(window.devicePixelRatio||1,3);
+  const targetW=Math.max(1,Math.round(rect.width*pixelRatio)),targetH=Math.max(1,Math.round(rect.height*pixelRatio));
+  if(canvas.width!==targetW||canvas.height!==targetH){canvas.width=targetW;canvas.height=targetH;}
+  const ctx=canvas.getContext('2d');if(!ctx)return;
+  ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);
+  const w=rect.width,h=rect.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#f5f8fd';ctx.fillRect(0,0,w,h);
+  const pad=8,scale=Math.min((w-2*pad)/boardWidth,(h-2*pad)/boardHeight);
+  const ox=(w-boardWidth*scale)/2,oy=(h-boardHeight*scale)/2;
+  minimapTransform={ox,oy,scale};
+  const projectX=x=>ox+x*scale,projectY=y=>oy+y*scale;
+  const nodesById=new Map(graph.nodes.map(n=>[n.id,n]));
+  ctx.lineWidth=1;ctx.strokeStyle='#bac7d9';
+  for(const edge of graph.edges){
+    const a=nodesById.get(edge.source),b=nodesById.get(edge.target);if(!a||!b)continue;
+    ctx.beginPath();ctx.moveTo(projectX(visualX(a)+NODE_WIDTH/2),projectY(visualY(a)+NODE_HEIGHT));
+    ctx.lineTo(projectX(visualX(b)+NODE_WIDTH/2),projectY(visualY(b)));ctx.stroke();
+  }
+  for(const n of graph.nodes){
+    const x=projectX(visualX(n)),y=projectY(visualY(n));
+    ctx.fillStyle=colors[n.type]||'#64748b';
+    ctx.fillRect(x,y,Math.max(3,NODE_WIDTH*scale),Math.max(2,NODE_HEIGHT*scale));
+    if(n.id===selectedId){ctx.strokeStyle='#1e3a8a';ctx.lineWidth=1.5;ctx.strokeRect(x-2,y-2,Math.max(3,NODE_WIDTH*scale)+4,Math.max(2,NODE_HEIGHT*scale)+4);}
+  }
+  const visibleX=viewport.scrollLeft/zoom,visibleY=viewport.scrollTop/zoom;
+  const visibleW=viewport.clientWidth/zoom,visibleH=viewport.clientHeight/zoom;
+  ctx.fillStyle='rgba(65,107,226,.13)';ctx.strokeStyle='#4f46e5';ctx.lineWidth=1.5;
+  ctx.fillRect(projectX(visibleX),projectY(visibleY),visibleW*scale,visibleH*scale);
+  ctx.strokeRect(projectX(visibleX),projectY(visibleY),visibleW*scale,visibleH*scale);
+}
+const minimapCanvas=$('jb-minimap');
+let minimapDragging=false;
+function panFromMinimap(e){
+  const t=minimapTransform,c=minimapCanvas;if(!t||!c)return;
+  const r=c.getBoundingClientRect();
+  const x=(e.clientX-r.left-t.ox)/t.scale,y=(e.clientY-r.top-t.oy)/t.scale;
+  viewport.scrollLeft=x*zoom-viewport.clientWidth/2;
+  viewport.scrollTop=y*zoom-viewport.clientHeight/2;
+  scheduleMinimap();
+}
+minimapCanvas?.addEventListener('pointerdown',e=>{
+  if(e.button!==0)return;
+  minimapDragging=true;minimapCanvas.setPointerCapture(e.pointerId);
+  panFromMinimap(e);e.preventDefault();
+});
+minimapCanvas?.addEventListener('pointermove',e=>{if(minimapDragging)panFromMinimap(e)});
+const stopMinimapPan=()=>{minimapDragging=false};
+minimapCanvas?.addEventListener('pointerup',stopMinimapPan);
+minimapCanvas?.addEventListener('pointercancel',stopMinimapPan);
+minimapCanvas?.addEventListener('lostpointercapture',stopMinimapPan);
+minimapCanvas?.addEventListener('keydown',e=>{
+  const amount=100*zoom;
+  if(e.key==='ArrowRight')viewport.scrollLeft+=amount;
+  else if(e.key==='ArrowLeft')viewport.scrollLeft-=amount;
+  else if(e.key==='ArrowDown')viewport.scrollTop+=amount;
+  else if(e.key==='ArrowUp')viewport.scrollTop-=amount;
+  else return;
+  e.preventDefault();scheduleMinimap();
+});
+$('jb-minimap-toggle')?.addEventListener('click',()=>{
+  const panel=$('jb-minimap-panel'),collapsed=panel.classList.toggle('is-collapsed');
+  $('jb-minimap-toggle').setAttribute('aria-expanded',String(!collapsed));
+  $('jb-minimap-toggle').textContent=collapsed?'نمایش':'جمع‌کردن';
+  if(!collapsed)scheduleMinimap();
+});
+viewport.addEventListener('scroll',scheduleMinimap,{passive:true});
 
 const configuredSecrets=new Set(ui.secretNodeIds||[]), pendingSecrets=new Map(), clearedSecrets=new Set();
 function notify(text,error=false){const t=$('toast');t.textContent=text;t.style.background=error?'#ae3049':'#233d65';t.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.style.display='none',4800)}
 function describe(n){const c=n.config||{};switch(n.type){case'trigger':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'کلید تعیین نشده'} · ${opNames[c.operator]||''}`;case'condition':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.scope==='after_enroll'?'بعد از ورود':'کل سوابق'}`;case'attribute':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'تعیین نشده'} · ${opNames[c.operator]||''}`;case'split':return `${c.percent??50}٪ مسیر A / ${100-(Number(c.percent)||0)}٪ مسیر B`;case'slot':return `${(c.days||[]).map(d=>days[d]).join('، ')} · ${c.from||''} تا ${c.to||''}`;case'delay':return `${c.hours??24} ساعت`;case'wait_event':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.hours??24} ساعت`;case'sms':return (c.delivery_mode||'legacy')==='managed'?`پیامک متنی · ${c.message?String(c.message).slice(0,38):'متن تعیین نشده'}`:`قالب قدیمی: ${c.template||'تعیین نشده'}`;case'email':return `ایمیل · ${c.subject||'موضوع تعیین نشده'}`;case'webpush':return `وب‌پوش نوتیفیکیشن · ${c.title||'عنوان تعیین نشده'}`;case'api':return `${c.method||'POST'} · ${c.url||'آدرس تعیین نشده'}`;case'exit':return 'پایان این مسیر'}}
-function redraw(){const root=$('nodes');root.innerHTML='';for(const n of graph.nodes){n.x=Number(n.x)||0;n.y=Number(n.y)||0;const el=document.createElement('div');el.id='node-'+n.id;el.className='node'+(n.id===selectedId?' selected':'');el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.setProperty('--accent',colors[n.type]||'#678');const outs=(ports[n.type]||[]).map((port,i)=>`<button class="socket output ${source?.id===n.id&&source.port===port?'highlight':''}" type="button" data-port="${port}" title="${esc(portLabels[port])}" style="top:${45+i*27}px"><span class="socket-label">${esc(portLabels[port])}</span></button>`).join('');el.innerHTML=`<div class="node-head"><span class="iconbox">${icons[n.type]||'■'}</span><strong>${labels[n.type]||n.type}</strong></div><div class="node-body">${esc(describe(n))}</div>${n.type!=='trigger'?'<button type="button" class="socket input" title="ورودی گره"></button>':''}${outs}`;el.addEventListener('click',()=>select(n.id));el.querySelector('.node-head').addEventListener('pointerdown',e=>moveNode(e,n,el));el.querySelector('.input')?.addEventListener('click',e=>{e.stopPropagation();connect(n.id)});el.querySelectorAll('.output').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();if(readonly)return;source={id:n.id,port:btn.dataset.port};redraw();notify('حالا ورودی گره مقصد را بزنید.')}));root.appendChild(el)}drawWires()}
-function drawWires(){sizeBoard();const svg=$('wires');svg.innerHTML='';const ns='http://www.w3.org/2000/svg';const defs=document.createElementNS(ns,'defs'),m=document.createElementNS(ns,'marker');m.setAttribute('id','jb-arrow');[['markerWidth','9'],['markerHeight','9'],['refX','8'],['refY','3'],['orient','auto']].forEach(([k,v])=>m.setAttribute(k,v));const tri=document.createElementNS(ns,'path');tri.setAttribute('d','M0 0 L8 3 L0 6 z');tri.setAttribute('fill','#94a4bd');m.appendChild(tri);defs.appendChild(m);svg.appendChild(defs);for(const e of graph.edges){const a=graph.nodes.find(n=>n.id===e.source),b=graph.nodes.find(n=>n.id===e.target);if(!a||!b)continue;const i=(ports[a.type]||[]).indexOf(e.port);if(i<0)continue;const sx=a.x+NODE_WIDTH,sy=a.y+54+i*27,tx=b.x,ty=b.y+64,dx=Math.max(75,Math.abs(tx-sx)*.48);const p=document.createElementNS(ns,'path');p.setAttribute('class','wire');p.setAttribute('d',`M${sx} ${sy} C${sx+dx} ${sy},${tx-dx} ${ty},${tx} ${ty}`);p.setAttribute('marker-end','url(#jb-arrow)');p.addEventListener('click',()=>{if(!readonly&&confirm('این اتصال حذف شود؟')){graph.edges=graph.edges.filter(z=>z!==e);dirty=true;redraw()}});svg.appendChild(p)}}
-function moveNode(e,n,el){if(readonly||e.button!==0)return;e.preventDefault();const sx=e.clientX,sy=e.clientY,ox=n.x,oy=n.y;el.setPointerCapture(e.pointerId);const onmove=ev=>{n.x=Math.max(0,Math.min(MAX_COORD,Math.round(ox+(ev.clientX-sx)/zoom)));n.y=Math.max(0,Math.min(MAX_COORD,Math.round(oy+(ev.clientY-sy)/zoom)));el.style.left=n.x+'px';el.style.top=n.y+'px';drawWires()};const onup=()=>{el.removeEventListener('pointermove',onmove);el.removeEventListener('pointerup',onup);dirty=true;select(n.id)};el.addEventListener('pointermove',onmove);el.addEventListener('pointerup',onup)}
+function redraw(){
+  const root=$('nodes');root.innerHTML='';
+  for(const n of graph.nodes){
+    n.x=Number(n.x)||0;n.y=Number(n.y)||0;
+    const el=document.createElement('div');el.id='node-'+n.id;
+    el.className='node'+(n.id===selectedId?' selected':'');
+    el.style.left=visualX(n)+'px';el.style.top=visualY(n)+'px';
+    el.style.setProperty('--accent',colors[n.type]||'#678');
+    const available=ports[n.type]||[];
+    const outs=available.map((port,i)=>`<button class="socket output ${source?.id===n.id&&source.port===port?'highlight':''}" type="button" data-port="${port}" title="${esc(portLabels[port])}" style="left:${outputPercent(i,available.length)}%"><span class="socket-label">${esc(portLabels[port])}</span></button>`).join('');
+    el.innerHTML=`<div class="node-head"><span class="iconbox">${icons[n.type]||'■'}</span><strong>${labels[n.type]||n.type}</strong></div><div class="node-body">${esc(describe(n))}</div>${n.type!=='trigger'?'<button type="button" class="socket input" title="ورودی گره از بالا"></button>':''}${outs}`;
+    el.addEventListener('click',()=>select(n.id));
+    el.querySelector('.node-head').addEventListener('pointerdown',e=>moveNode(e,n,el));
+    el.querySelector('.input')?.addEventListener('click',e=>{e.stopPropagation();connect(n.id)});
+    el.querySelectorAll('.output').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();if(readonly)return;
+      source={id:n.id,port:btn.dataset.port};redraw();notify('حالا اتصال ورودی بالای گره مقصد را بزنید.');
+    }));root.appendChild(el);
+  }
+  drawWires();
+}
+function drawWires(){
+  sizeBoard();const svg=$('wires');svg.innerHTML='';
+  const ns='http://www.w3.org/2000/svg';const defs=document.createElementNS(ns,'defs'),m=document.createElementNS(ns,'marker');
+  m.setAttribute('id','jb-arrow');[['markerWidth','9'],['markerHeight','9'],['refX','8'],['refY','3'],['orient','auto']].forEach(([k,v])=>m.setAttribute(k,v));
+  const tri=document.createElementNS(ns,'path');tri.setAttribute('d','M0 0 L8 3 L0 6 z');tri.setAttribute('fill','#94a4bd');m.appendChild(tri);defs.appendChild(m);svg.appendChild(defs);
+  for(const edge of graph.edges){
+    const a=graph.nodes.find(n=>n.id===edge.source),b=graph.nodes.find(n=>n.id===edge.target);
+    if(!a||!b)continue;
+    const available=ports[a.type]||[],index=available.indexOf(edge.port);if(index<0)continue;
+    const aElement=$('node-'+a.id),bElement=$('node-'+b.id);
+    const sourceWidth=aElement?.offsetWidth||NODE_WIDTH,sourceHeight=aElement?.offsetHeight||NODE_HEIGHT;
+    const targetWidth=bElement?.offsetWidth||NODE_WIDTH;
+    const sx=visualX(a)+sourceWidth*outputPercent(index,available.length)/100;
+    const sy=visualY(a)+sourceHeight;
+    const tx=visualX(b)+targetWidth/2,ty=visualY(b);
+    let d;
+    if(ty>=sy+12){
+      const dy=Math.max(58,Math.abs(ty-sy)*0.48);
+      d=`M${sx} ${sy} C${sx} ${sy+dy},${tx} ${ty-dy},${tx} ${ty}`;
+    }else{
+      // A backwards edge goes around the cards before entering target from above.
+      const side=tx>=sx?1:-1;
+      const bypass=side>0?Math.max(sx,tx)+145:Math.min(sx,tx)-145;
+      d=`M${sx} ${sy} C${sx} ${sy+60},${bypass} ${sy+40},${bypass} ${sy+76} L${bypass} ${ty-70} C${bypass} ${ty-32},${tx} ${ty-45},${tx} ${ty}`;
+    }
+    const path=document.createElementNS(ns,'path');path.setAttribute('class','wire');path.setAttribute('d',d);
+    path.setAttribute('marker-end','url(#jb-arrow)');
+    path.addEventListener('click',()=>{if(!readonly&&confirm('این اتصال حذف شود؟')){graph.edges=graph.edges.filter(z=>z!==edge);dirty=true;redraw()}});
+    svg.appendChild(path);
+  }
+  scheduleMinimap();
+}
+function moveNode(e,n,el){
+  if(readonly||e.button!==0)return;
+  e.preventDefault();const sx=e.clientX,sy=e.clientY;
+  let ox=n.x,oy=n.y;el.setPointerCapture(e.pointerId);
+  const onmove=ev=>{
+    let x=ox+(ev.clientX-sx)/zoom,y=oy+(ev.clientY-sy)/zoom;
+    const rebased=rebaseIfNeeded(x,y);
+    if(rebased){ox+=rebased.dx;oy+=rebased.dy;x=rebased.x;y=rebased.y;}
+    n.x=Math.max(0,Math.min(MAX_COORD,Math.round(x)));
+    n.y=Math.max(0,Math.min(MAX_COORD,Math.round(y)));
+    el.style.left=visualX(n)+'px';el.style.top=visualY(n)+'px';drawWires();
+  };
+  const onup=()=>{el.removeEventListener('pointermove',onmove);el.removeEventListener('pointerup',onup);dirty=true;select(n.id)};
+  el.addEventListener('pointermove',onmove);el.addEventListener('pointerup',onup);
+}
 function connect(id){if(readonly||!source)return;if(source.id===id)return notify('گره به خودش متصل نمی‌شود.',true);graph.edges=graph.edges.filter(e=>!(e.source===source.id&&e.port===source.port));graph.edges.push({id:uid(),source:source.id,port:source.port,target:id});source=null;dirty=true;redraw()}
-function addNode(type,x,y){if(readonly)return notify('طرح در وضعیت فعلی قابل ویرایش نیست.',true);if(type==='trigger'&&graph.nodes.some(n=>n.type==='trigger'))return notify('هر جرنی فقط یک نقطه شروع دارد.',true);const n={id:uid(),type,x:Math.max(0,Math.min(MAX_COORD,Math.round(x))),y:Math.max(0,Math.min(MAX_COORD,Math.round(y))),config:structuredClone(defaults[type])};graph.nodes.push(n);dirty=true;select(n.id);focusNode(n)}
+function addNode(type,x,y){
+  if(readonly)return notify('طرح در وضعیت فعلی قابل ویرایش نیست.',true);
+  if(type==='trigger'&&graph.nodes.some(n=>n.type==='trigger'))return notify('هر جرنی فقط یک نقطه شروع دارد.',true);
+  const point=rebaseIfNeeded(x,y);if(!point)return;
+  const n={id:uid(),type,x:Math.max(0,Math.min(MAX_COORD,Math.round(point.x))),y:Math.max(0,Math.min(MAX_COORD,Math.round(point.y))),config:structuredClone(defaults[type])};
+  graph.nodes.push(n);dirty=true;select(n.id);focusNode(n);
+}
 function field(label,id,value,type='text',extra=''){return `<div class="field"><span>${label}</span><input id="${id}" type="${type}" value="${esc(value)}" ${extra}></div>`}
 function selectField(label,id,value,choices){return `<div class="field"><span>${label}</span><select id="${id}">${choices.map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`}
 function textField(label,id,value,rows=4){return `<div class="field"><span>${label}</span><textarea id="${id}" rows="${rows}">${esc(value)}</textarea></div>`}
@@ -334,20 +509,24 @@ fullscreenBtn?.addEventListener('click',()=>toggleEditor(!editorLayout.classList
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&editorLayout?.classList.contains('jb-editor-expanded')&&!document.body.classList.contains('jb-preview-open'))toggleEditor(false);
 });
-window.addEventListener('resize',()=>sizeBoard());
+window.addEventListener('resize',()=>{sizeBoard();scheduleMinimap()});
 
-document.querySelectorAll('.palette-entry').forEach(item=>{item.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-jb-node',item.dataset.type);e.dataTransfer.effectAllowed='copy'});item.addEventListener('click',()=>{const v=$('viewport');addNode(item.dataset.type,(v.scrollLeft+v.clientWidth/2)/zoom,(v.scrollTop+v.clientHeight/2)/zoom)})});
-$('viewport').addEventListener('dragover',e=>e.preventDefault());$('viewport').addEventListener('drop',e=>{e.preventDefault();const type=e.dataTransfer.getData('text/x-jb-node');if(!Object.hasOwn(ports,type))return;const b=$('board').getBoundingClientRect();addNode(type,(e.clientX-b.left)/zoom,(e.clientY-b.top)/zoom)});
-// Four-way canvas movement: normal wheel = vertical, trackpad = both axes,
-// Shift+wheel = horizontal, drag an empty area = pan. Never interfere with node drag/ports.
+document.querySelectorAll('.palette-entry').forEach(item=>{item.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-jb-node',item.dataset.type);e.dataTransfer.effectAllowed='copy'});item.addEventListener('click',()=>{const v=$('viewport');addNode(item.dataset.type,(v.scrollLeft+v.clientWidth/2)/zoom-originX,(v.scrollTop+v.clientHeight/2)/zoom-originY)})});
+$('viewport').addEventListener('dragover',e=>e.preventDefault());$('viewport').addEventListener('drop',e=>{e.preventDefault();const type=e.dataTransfer.getData('text/x-jb-node');if(!Object.hasOwn(ports,type))return;const b=$('board').getBoundingClientRect();addNode(type,(e.clientX-b.left)/zoom-originX,(e.clientY-b.top)/zoom-originY)});
+// Mouse wheel zooms around the cursor. Shift+wheel pans horizontally;
+// Alt+wheel pans vertically; trackpad two-axis gestures continue to pan.
 const canvas=$('viewport');
 canvas.classList.add('jb-pan-ready');
-canvas.addEventListener('wheel', e => {
-  if(e.ctrlKey || e.metaKey) return; // leave browser zoom available
+canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   const unit=e.deltaMode===1?18:(e.deltaMode===2?canvas.clientHeight:1);
-  if(e.shiftKey){canvas.scrollLeft+=(e.deltaX+e.deltaY)*unit;}
-  else {canvas.scrollLeft+=e.deltaX*unit;canvas.scrollTop+=e.deltaY*unit;}
+  if(e.shiftKey){canvas.scrollLeft+=(e.deltaX+e.deltaY)*unit;return;}
+  if(e.altKey){canvas.scrollTop+=e.deltaY*unit;canvas.scrollLeft+=e.deltaX*unit;return;}
+  if(!e.ctrlKey&&!e.metaKey&&Math.abs(e.deltaX)>2){
+    canvas.scrollLeft+=e.deltaX*unit;canvas.scrollTop+=e.deltaY*unit;return;
+  }
+  const factor=Math.exp(-e.deltaY*unit*.0018);
+  setZoom(zoom*factor,{clientX:e.clientX,clientY:e.clientY});
 },{passive:false});
 let pan=null;
 canvas.addEventListener('pointerdown', e => {

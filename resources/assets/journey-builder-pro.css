@@ -269,3 +269,7 @@ body.jb-editor-fullscreen{overflow:hidden}
 .editor-layout.jb-editor-expanded .viewport{min-height:0;flex:1}
 .editor-layout.jb-editor-expanded .editor-toolbar{min-height:64px}
 @media(max-width:760px){.editor-toolbar{gap:6px}.jb-canvas-controls{width:100%;justify-content:center}.jb-canvas-controls .btn{font-size:10px;padding:5px 7px}}
+
+/* Keep these controls legible in the optional professional skin. */
+.jb-minimap-panel{border-color:#dbdff2;box-shadow:0 14px 34px rgba(26,43,89,.16)}
+.jb-minimap-panel strong{color:#3b4464}
