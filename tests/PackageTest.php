@@ -29,6 +29,7 @@ final class PackageTest extends TestCase
     public function test_package_bootstraps_and_has_no_separate_login_routes(): void
     {
         $this->assertTrue(Route::has('jb.index'));
+        $this->assertTrue(Route::has('jb.readiness'));
         $this->assertTrue(Route::has('jb.status'));
         $this->assertFalse(Route::has('jb.login'));
         $this->assertFalse(Route::has('jb.logout'));

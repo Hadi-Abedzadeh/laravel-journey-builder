@@ -6,10 +6,12 @@ use Illuminate\Support\Facades\Route;
 use OpenJourney\LaravelJourneyBuilder\Http\Controllers\SmsProviderController;
 use OpenJourney\LaravelJourneyBuilder\Http\Controllers\ChannelProviderController;
 use OpenJourney\LaravelJourneyBuilder\Http\Controllers\ChannelLogsController;
+use OpenJourney\LaravelJourneyBuilder\Http\Controllers\ReadinessController;
 
 Route::middleware(['web', DashboardAccess::class])->prefix(config('journey_builder.route_prefix', 'journeys'))->name('jb.')->group(function () {
         Route::get('/',[JourneyBuilderController::class,'index'])->name('index');
         Route::get('/sms',[JourneyBuilderController::class,'smsIndex'])->name('sms');
+        Route::get('/readiness',[ReadinessController::class,'index'])->name('readiness');
         Route::get('/monitoring',[JourneyBuilderController::class,'monitoring'])->name('monitoring');
         Route::get('/channels/logs',[ChannelLogsController::class,'index'])->name('channels.logs');
         Route::get('/channels/{kind}/providers',[ChannelProviderController::class,'index'])->where('kind','email|webpush')->name('channels.index');

@@ -60,8 +60,15 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
         $pushProviders=\Illuminate\Support\Facades\Schema::connection(config('journey_builder.connection','sqlsrv'))->hasTable('jb_push_providers')
             ? $this->db()->table('jb_push_providers')->where('is_enabled',1)->whereNull('deleted_at')->get(['id','name'])->map(fn($p)=>['id'=>$p->id,'name'=>$p->name])->all() : [];
         $smsProviders=$this->db()->table('jb_sms_providers')->where('is_enabled',1)->whereNull('deleted_at')->orderBy('name')->get(['id','name'])->map(static fn($p)=>['id'=>$p->id,'name'=>$p->name])->all();
+        $onsites=[];
+        $onsitesError=null;
+        try {
+            $onsites=app(\OpenJourney\LaravelJourneyBuilder\Services\OnsiteMongoService::class)->onsiteNames();
+        } catch (\Throwable $e) {
+            $onsitesError='فهرست آنسایت در دسترس نیست؛ وضعیت اتصال MongoDB را در Readiness بررسی کنید.';
+        }
         $canEdit = $this->isEditableFlow($this->db(), $flow);
-        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders','emailProviders','pushProviders','canEdit'))->header('Cache-Control','no-store, private');
+        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders','emailProviders','pushProviders','onsites','onsitesError','canEdit'))->header('Cache-Control','no-store, private');
     }
 
     public function show(Request $request, int $id)

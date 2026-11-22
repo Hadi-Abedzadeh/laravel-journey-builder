@@ -1,11 +1,11 @@
 (()=>{'use strict';
 const ui=window.JB_UI, graph=ui.graph, readonly=ui.readonly;
-const ports={trigger:['next'],condition:['yes','no'],attribute:['yes','no'],split:['a','b'],slot:['next'],delay:['next'],wait_event:['event','timeout'],sms:['success','failure'],email:['success','failure'],webpush:['success','failure'],api:['success','failure'],exit:[]};
-const labels={trigger:'ورود کاربران',condition:'شرط رویداد',attribute:'شرط ویژگی',split:'تقسیم مسیر',slot:'بازه زمانی',delay:'تأخیر',wait_event:'انتظار رویداد',sms:'ارسال پیامک',email:'ارسال ایمیل',webpush:'وب‌پوش نوتیفیکیشن',api:'درخواست API',exit:'خروج از جرنی'};
-const icons={trigger:'▶',condition:'◇',attribute:'◈',split:'⑂',slot:'◷',delay:'◴',wait_event:'⌛',sms:'✉',email:'✉',webpush:'◉',api:'↗',exit:'■'};
-const colors={trigger:'#3182ee',condition:'#e0a434',attribute:'#e7a238',split:'#9d6ddd',slot:'#ed9563',delay:'#eb9463',wait_event:'#cf6d75',sms:'#14a985',email:'#7b61e8',webpush:'#0e9fbd',api:'#3677d6',exit:'#8795a8'};
+const ports={trigger:['next'],condition:['yes','no'],attribute:['yes','no'],split:['a','b'],slot:['next'],delay:['next'],wait_event:['event','timeout'],sms:['success','failure'],email:['success','failure'],webpush:['success','failure'],api:['success','failure'],onsite:['success','failure'],exit:[]};
+const labels={trigger:'ورود کاربران',condition:'شرط رویداد',attribute:'شرط ویژگی',split:'تقسیم مسیر',slot:'بازه زمانی',delay:'تأخیر',wait_event:'انتظار رویداد',sms:'ارسال پیامک',email:'ارسال ایمیل',webpush:'وب‌پوش نوتیفیکیشن',api:'درخواست API',onsite:'افزودن آنسایت',exit:'خروج از جرنی'};
+const icons={trigger:'▶',condition:'◇',attribute:'◈',split:'⑂',slot:'◷',delay:'◴',wait_event:'⌛',sms:'✉',email:'✉',webpush:'◉',api:'↗',onsite:'▣',exit:'■'};
+const colors={trigger:'#3182ee',condition:'#e0a434',attribute:'#e7a238',split:'#9d6ddd',slot:'#ed9563',delay:'#eb9463',wait_event:'#cf6d75',sms:'#14a985',email:'#7b61e8',webpush:'#0e9fbd',api:'#3677d6',onsite:'#10a088',exit:'#8795a8'};
 const portLabels={next:'بعدی',yes:'بله',no:'خیر',a:'مسیر A',b:'مسیر B',event:'رویداد',timeout:'زمان تمام شد',success:'موفق',failure:'ناموفق'};
-const defaults={trigger:{section:'attributes',name:'',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever',key:'',operator:'exists',value:''},attribute:{section:'attributes',name:'',key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone'},email:{provider_id:0,recipient_attribute:'email',subject:'',body:'',format:'text'},webpush:{provider_id:0,title:'',body:'',url:'',ttl:24,button_title:'',button_url:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',headers:{},body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},exit:{}};
+const defaults={trigger:{section:'attributes',name:'',sign:'',key:'',operator:'exists',value:''},condition:{event:'',sign:'',scope:'ever',key:'',operator:'exists',value:''},attribute:{section:'attributes',name:'',key:'',sign:'',operator:'exists',value:''},split:{percent:50},slot:{days:[0],from:'10:00',to:'15:00'},delay:{hours:24},wait_event:{event:'',sign:'',hours:24},sms:{delivery_mode:'managed',provider_id:0,template:'',message:'',receptor_attribute:'phone'},email:{provider_id:0,recipient_attribute:'email',subject:'',body:'',format:'text'},webpush:{provider_id:0,title:'',body:'',url:'',ttl:24,button_title:'',button_url:''},api:{url:'',method:'POST',token_source:'none',token_header:'bearer',token_custom_header:'X-Access-Token',headers:{},body:'{"userId":"{{userId}}","flowId":"{{flowId}}"}'},onsite:{onsite_name:'',failure_policy:'hold'},exit:{}};
 const days=['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'];
 const opNames={exists:'مقدار داشته باشد',not_exists:'مقدار نداشته باشد (قدیمی)',is_empty:'خالی باشد (NULL / Empty)',is_not_empty:'خالی نباشد',equals:'برابر باشد',not_equals:'برابر نباشد',starts_with:'با مقدار شروع شود',not_starts_with:'با مقدار شروع نشود'};
 const $=id=>document.getElementById(id);
@@ -101,7 +101,7 @@ function focusNode(node){
 // modifies graph_json or makes any network requests.
 let minimapTransform=null;
 function drawMinimap(){
-  const canvas=$('jb-minimap');if(!canvas||canvas.closest('.jb-minimap-panel')?.classList.contains('is-collapsed'))return;
+  const canvas=$('jb-minimap');if(!canvas)return;
   const rect=canvas.getBoundingClientRect();if(rect.width<1||rect.height<1)return;
   const pixelRatio=Math.min(window.devicePixelRatio||1,3);
   const targetW=Math.max(1,Math.round(rect.width*pixelRatio)),targetH=Math.max(1,Math.round(rect.height*pixelRatio));
@@ -163,17 +163,11 @@ minimapCanvas?.addEventListener('keydown',e=>{
   else return;
   e.preventDefault();scheduleMinimap();
 });
-$('jb-minimap-toggle')?.addEventListener('click',()=>{
-  const panel=$('jb-minimap-panel'),collapsed=panel.classList.toggle('is-collapsed');
-  $('jb-minimap-toggle').setAttribute('aria-expanded',String(!collapsed));
-  $('jb-minimap-toggle').textContent=collapsed?'نمایش':'جمع‌کردن';
-  if(!collapsed)scheduleMinimap();
-});
 viewport.addEventListener('scroll',scheduleMinimap,{passive:true});
 
 const configuredSecrets=new Set(ui.secretNodeIds||[]), pendingSecrets=new Map(), clearedSecrets=new Set();
 function notify(text,error=false){const t=$('toast');t.textContent=text;t.style.background=error?'#ae3049':'#233d65';t.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.style.display='none',4800)}
-function describe(n){const c=n.config||{};switch(n.type){case'trigger':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'کلید تعیین نشده'} · ${opNames[c.operator]||''}`;case'condition':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.scope==='after_enroll'?'بعد از ورود':'کل سوابق'}`;case'attribute':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'تعیین نشده'} · ${opNames[c.operator]||''}`;case'split':return `${c.percent??50}٪ مسیر A / ${100-(Number(c.percent)||0)}٪ مسیر B`;case'slot':return `${(c.days||[]).map(d=>days[d]).join('، ')} · ${c.from||''} تا ${c.to||''}`;case'delay':return `${c.hours??24} ساعت`;case'wait_event':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.hours??24} ساعت`;case'sms':return (c.delivery_mode||'legacy')==='managed'?`پیامک متنی · ${c.message?String(c.message).slice(0,38):'متن تعیین نشده'}`:`قالب قدیمی: ${c.template||'تعیین نشده'}`;case'email':return `ایمیل · ${c.subject||'موضوع تعیین نشده'}`;case'webpush':return `وب‌پوش نوتیفیکیشن · ${c.title||'عنوان تعیین نشده'}`;case'api':return `${c.method||'POST'} · ${c.url||'آدرس تعیین نشده'}`;case'exit':return 'پایان این مسیر'}}
+function describe(n){const c=n.config||{};switch(n.type){case'trigger':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'کلید تعیین نشده'} · ${opNames[c.operator]||''}`;case'condition':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.scope==='after_enroll'?'بعد از ورود':'کل سوابق'}`;case'attribute':return `${c.section||'attributes'} / ${c.name||'*'} / ${c.key||'تعیین نشده'} · ${opNames[c.operator]||''}`;case'split':return `${c.percent??50}٪ مسیر A / ${100-(Number(c.percent)||0)}٪ مسیر B`;case'slot':return `${(c.days||[]).map(d=>days[d]).join('، ')} · ${c.from||''} تا ${c.to||''}`;case'delay':return `${c.hours??24} ساعت`;case'wait_event':return `${c.event||'رویداد تعیین نشده'}${c.key?' / '+c.key+' · '+(opNames[c.operator]||''):''} · ${c.hours??24} ساعت`;case'sms':return (c.delivery_mode||'legacy')==='managed'?`پیامک متنی · ${c.message?String(c.message).slice(0,38):'متن تعیین نشده'}`:`قالب قدیمی: ${c.template||'تعیین نشده'}`;case'email':return `ایمیل · ${c.subject||'موضوع تعیین نشده'}`;case'webpush':return `وب‌پوش نوتیفیکیشن · ${c.title||'عنوان تعیین نشده'}`;case'api':return `${c.method||'POST'} · ${c.url||'آدرس تعیین نشده'}`;case'onsite':return `آنسایت · ${c.onsite_name||'انتخاب نشده'}`;case'exit':return 'پایان این مسیر'}}
 function redraw(){
   const root=$('nodes');root.innerHTML='';
   for(const n of graph.nodes){
@@ -254,7 +248,7 @@ function field(label,id,value,type='text',extra=''){return `<div class="field"><
 function selectField(label,id,value,choices){return `<div class="field"><span>${label}</span><select id="${id}">${choices.map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`}
 function textField(label,id,value,rows=4){return `<div class="field"><span>${label}</span><textarea id="${id}" rows="${rows}">${esc(value)}</textarea></div>`}
 const ops=Object.entries(opNames);const eventScope=[['ever','تمام سوابق موجود'],['after_enroll','از زمان ورود به جرنی']];
-function select(id){selectedId=id;redraw();const n=graph.nodes.find(n=>n.id===id),box=$('inspector');if(!n){box.innerHTML='<p class="help">گرهی انتخاب نشده است.</p>';return}const c=n.config||{};let html=`<b>${labels[n.type]}</b>`;
+function select(id){selectedId=id;redraw();const n=graph.nodes.find(n=>n.id===id),box=$('inspector');if(!n){box.innerHTML='';return}const c=n.config||{};let html=`<b>${labels[n.type]}</b>`;
 if(n.type==='trigger')html+=selectField('بخش دیتابیس (section)','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('نام رویداد / مجموعه (name، اختیاری)','cfg-name',c.name||'','text','maxlength="50"')+field('منبع sign (اختیاری)','cfg-sign',c.sign||'')+field('کلید (key، برای رویداد اختیاری)','cfg-key',c.key||'')+selectField('فیلتر ورود','cfg-operator',c.operator||'exists',ops)+field('مقدار (در صورت نیاز)','cfg-value',c.value||'')+'<div class="help">مثال: events / Reg_Started / NationalCode / خالی باشد. مقدار خالی یعنی ردیفی با value برابر NULL یا رشته خالی وجود دارد.</div>';
 if(n.type==='condition')html+=field('نام رویداد (name)','cfg-event',c.event||'')+field('sign اختیاری','cfg-sign',c.sign||'')+field('کلید داخل رویداد (key، اختیاری)','cfg-key',c.key||'')+selectField('عملگر مقدار رویداد','cfg-operator',c.operator||'exists',ops)+field('مقدار (در صورت نیاز)','cfg-value',c.value||'')+selectField('محدوده زمانی','cfg-scope',c.scope||'ever',eventScope);
 if(n.type==='attribute')html+=selectField('بخش دیتابیس (section)','cfg-section',c.section||'attributes',[['attributes','ویژگی کاربران (attributes)'],['events','رویدادها (events)']])+field('نام رویداد / مجموعه (name، اختیاری)','cfg-name',c.name||'','text','maxlength="50"')+field('کلید (key، برای رویداد اختیاری)','cfg-key',c.key||'')+field('sign اختیاری','cfg-sign',c.sign||'')+selectField('عملگر','cfg-operator',c.operator||'exists',ops)+field('مقدار','cfg-value',c.value||'');
@@ -308,14 +302,21 @@ if(n.type==='api'){
   +textField('بدنه JSON (متغیرها قابل استفاده‌اند)','cfg-body',c.body||'{}',8)
   +'<div class="help">متغیرها: {{userId}}, {{flowId}}, {{runId}}, {{nodeId}} و Attributeهای کاربر مثل {{phone}}. فرمت WebEngage مثل user["system"]["phone"] پشتیبانی نمی‌شود. API فقط به دامنه عمومی HTTPS روی پورت 443 متصل می‌شود؛ HTTP با پورت سفارشی یا IP خصوصی مسدود است.</div>';
 }
-if(n.type==='exit')html+='<div class="muted-box">هنگام رسیدن کاربر به این مرحله، اجرای او پایان می‌یابد.</div>';
-if(['sms','api','email','webpush'].includes(n.type)) {
+if(n.type==='onsite') {
+  const choices=[['','انتخاب آنسایت'],...(ui.onsites||[]).map(name=>[String(name),String(name)])];
+  if(c.onsite_name && !choices.some(([v])=>v===c.onsite_name))choices.push([c.onsite_name,`${c.onsite_name} (نام ذخیره‌شده)`]);
+  html+=selectField('انتخاب Onsite از MongoDB (onsite_name)','cfg-onsite_name',c.onsite_name||'',choices);
+  if(ui.onsitesError)html+='<div class="jb-onsite-warning">'+esc(ui.onsitesError)+'</div>';
+}
+if(n.type==='exit')html+='';
+if(['sms','api','email','webpush','onsite'].includes(n.type)) {
  html+=selectField('رفتار در شکست قطعی','cfg-failure_policy',c.failure_policy||'hold', [['hold','توقف برای بررسی و Retry'],['branch','ادامه از خروجی Failure']]);
 }
 if(['sms','email','webpush'].includes(n.type))html+='<button type="button" class="btn jb-preview-launch" id="preview-node">◉ پیش‌نمایش '+(n.type==='sms'?'پیامک':n.type==='email'?'ایمیل':'وب‌پوش نوتیفیکیشن')+'</button>';
 if(!readonly)html+='<button class="btn danger" id="delete-node" style="width:100%;margin-top:15px">حذف گره</button>';
 box.innerHTML=html;
-const map={'cfg-section':'section','cfg-name':'name','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-delivery_mode':'delivery_mode','cfg-success_mode':'success_mode','cfg-failure_policy':'failure_policy','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body','cfg-recipient_attribute':'recipient_attribute','cfg-subject':'subject','cfg-format':'format','cfg-title':'title','cfg-ttl':'ttl','cfg-button_title':'button_title','cfg-button_url':'button_url'};
+box.querySelectorAll('.help,.muted-box').forEach(element=>element.remove());
+const map={'cfg-section':'section','cfg-name':'name','cfg-sign':'sign','cfg-key':'key','cfg-operator':'operator','cfg-value':'value','cfg-event':'event','cfg-scope':'scope','cfg-percent':'percent','cfg-from':'from','cfg-to':'to','cfg-hours':'hours','cfg-template':'template','cfg-message':'message','cfg-receptor_attribute':'receptor_attribute','cfg-delivery_mode':'delivery_mode','cfg-success_mode':'success_mode','cfg-failure_policy':'failure_policy','cfg-provider_id':'provider_id','cfg-url':'url','cfg-method':'method','cfg-token_source':'token_source','cfg-token_header':'token_header','cfg-token_custom_header':'token_custom_header','cfg-body':'body','cfg-recipient_attribute':'recipient_attribute','cfg-subject':'subject','cfg-format':'format','cfg-title':'title','cfg-ttl':'ttl','cfg-button_title':'button_title','cfg-button_url':'button_url','cfg-onsite_name':'onsite_name'};
 for(const [input,key] of Object.entries(map)){const el=$(input);if(!el)continue;el.disabled=readonly;el.addEventListener('input',()=>{c[key]=['hours','percent','provider_id','ttl'].includes(key)?Number(el.value):el.value;dirty=true;const nbody=$('node-'+n.id)?.querySelector('.node-body');if(nbody)nbody.textContent=describe(n)})}
 if(n.type==='sms'){
  const modeInput=$('cfg-delivery_mode');
@@ -385,7 +386,7 @@ if(n.type==='api'){
 }
 $('preview-node')?.addEventListener('click',()=>showMessagePreview(n));
 box.querySelectorAll('[data-day]').forEach(el=>{el.disabled=readonly;el.addEventListener('change',()=>{c.days=[...box.querySelectorAll('[data-day]:checked')].map(x=>Number(x.dataset.day));dirty=true;redraw()})});
-$('delete-node')?.addEventListener('click',()=>{if(!confirm('گره و اتصالات آن حذف شود؟'))return;graph.nodes=graph.nodes.filter(x=>x.id!==id);pendingSecrets.delete(id);clearedSecrets.delete(id);configuredSecrets.delete(id);graph.edges=graph.edges.filter(x=>x.source!==id&&x.target!==id);dirty=true;selectedId=null;redraw();box.innerHTML='<p class="help">گرهی انتخاب نشده است.</p>'});}
+$('delete-node')?.addEventListener('click',()=>{if(!confirm('گره و اتصالات آن حذف شود؟'))return;graph.nodes=graph.nodes.filter(x=>x.id!==id);pendingSecrets.delete(id);clearedSecrets.delete(id);configuredSecrets.delete(id);graph.edges=graph.edges.filter(x=>x.source!==id&&x.target!==id);dirty=true;selectedId=null;redraw();box.innerHTML=''});}
 // Previews are read-only, render unsaved inspector values and NEVER call any delivery endpoint.
 // Placeholder values are fictional. Real attributes are substituted only by backend dispatchers.
 const sampleAttributes={firstName:'کاربر',lastName:'نمونه',phone:'09120000000',email:'sample@example.com',userId:'sample-user-id'};

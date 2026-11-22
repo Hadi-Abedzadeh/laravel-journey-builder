@@ -45,6 +45,21 @@ return [
         'email' => ['enabled'=>(bool)env('JOURNEY_BUILDER_EMAIL_ENABLED',false)],
         'webpush' => ['enabled'=>(bool)env('JOURNEY_BUILDER_WEBPUSH_ENABLED',false)],
     ],
+    // Onsite is opt-in. MongoDB credentials are supplied only through ENV; never saved in a flow.
+    'onsite' => [
+        'enabled' => (bool) env('JOURNEY_BUILDER_ONSITE_ENABLED', false),
+        'mongo' => [
+            'uri' => env('JOURNEY_BUILDER_MONGODB_URI', ''),
+            'database' => env('JOURNEY_BUILDER_MONGODB_DATABASE', 'onsite_journey'),
+            'onsites_collection' => env('JOURNEY_BUILDER_MONGODB_ONSITES_COLLECTION', 'onsites'),
+            'users_collection' => env('JOURNEY_BUILDER_MONGODB_USERS_COLLECTION', 'users'),
+            'onsite_name_field' => env('JOURNEY_BUILDER_MONGODB_NAME_FIELD', 'onsite_name'),
+            // Confirm these two fields against a real `users` document before enabling live assignments.
+            'user_id_field' => env('JOURNEY_BUILDER_MONGODB_USER_ID_FIELD', 'userId'),
+            'assignments_field' => env('JOURNEY_BUILDER_MONGODB_ASSIGNMENTS_FIELD', 'onsites'),
+            'create_user_if_missing' => (bool) env('JOURNEY_BUILDER_MONGODB_UPSERT_USER', false),
+        ],
+    ],
     'api' => [
         'enabled' => env('JOURNEY_BUILDER_API_ENABLED', false),
         'timeout' => 15,

@@ -5,5 +5,6 @@
         <a href="{{ route('jb.sms') }}">گزارش پیامک</a>
         <a href="{{ route('jb.sms.providers') }}">تنظیمات پنل‌ها</a>
         <a href="{{ route('jb.monitoring') }}">لاگ و نظارت</a>
+        <a href="{{ route('jb.readiness') }}">وضعیت اتصال‌ها</a>
     </div>
 </footer>

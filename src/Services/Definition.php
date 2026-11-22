@@ -11,7 +11,8 @@ final class Definition
         'condition' => ['yes', 'no'], 'attribute' => ['yes', 'no'],
         'wait_event' => ['event', 'timeout'], 'split' => ['a', 'b'],
         'sms' => ['success', 'failure'], 'api' => ['success', 'failure'],
-        'email' => ['success', 'failure'], 'webpush' => ['success', 'failure'], 'exit' => [],
+        'email' => ['success', 'failure'], 'webpush' => ['success', 'failure'],
+        'onsite' => ['success', 'failure'], 'exit' => [],
     ];
 
     public static function blank(): array
@@ -146,6 +147,13 @@ final class Definition
                     $unmatched=preg_replace('/\{\{\s*[A-Za-z][A-Za-z0-9_]{0,49}\s*\}\}/','',(string)($cfg[$field]??''));
                     if (str_contains($unmatched,'{{') || str_contains($unmatched,'}}')) self::fail('متغیر ناشناخته در متن.');
                 }
+            }
+            if ($type === 'onsite') {
+                if (array_diff(array_keys($cfg), ['onsite_name', 'failure_policy'])) self::fail('تنظیمات ناشناخته گره آنسایت.');
+                self::short($cfg['onsite_name'] ?? '', 180, 'onsite name');
+                if (!in_array($cfg['failure_policy'] ?? 'hold', ['hold', 'branch'], true)) self::fail('سیاست شکست آنسایت نامعتبر است.');
+                if ($publish && trim((string)($cfg['onsite_name'] ?? '')) === '') self::fail('نام آنسایت را انتخاب کنید.');
+                if ($publish && !config('journey_builder.onsite.enabled', false)) self::fail('قبل از فعال‌سازی جرنی، سرویس Onsite را در تنظیمات فعال و تست کنید.');
             }
             if ($type === 'api') {
                 self::short($cfg['url'] ?? '', 1000, 'API URL');

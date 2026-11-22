@@ -78,3 +78,8 @@ body.jb-editor-fullscreen{overflow:hidden}
 .jb-minimap-panel.is-collapsed{width:169px}
 .jb-minimap-panel.is-collapsed #jb-minimap,.jb-minimap-panel.is-collapsed .jb-minimap-hint{display:none}
 @media(max-width:760px){.jb-minimap-panel{left:8px;bottom:8px;width:188px;padding:6px}#jb-minimap{height:110px}.jb-minimap-hint{display:none}}
+
+/* v0.3.4-beta.14: always-expanded minimap, raised above footer controls. */
+.jb-minimap-panel{bottom:75px!important}
+@media(max-width:760px){.jb-minimap-panel{bottom:75px!important}}
+.jb-onsite-warning{background:#fff3e2;border:1px solid #f3d6a0;color:#975a08;padding:9px;border-radius:9px;font-size:11px;line-height:1.8;margin-top:10px}

@@ -5,7 +5,8 @@
     <a href="{{ route('jb.sms.providers') }}" @class(['current' => ($active ?? '') === 'providers'])>پنل‌های پیامکی</a>
     <a href="{{ route('jb.channels.index','email') }}" @class(['current' => ($active ?? '') === 'email'])>پنل‌های ایمیل</a>
     <a href="{{ route('jb.channels.index','webpush') }}" @class(['current' => ($active ?? '') === 'webpush'])>وب‌پوش نوتیفیکیشن</a>
-    <a href="{{ route('jb.monitoring') }} @class(['current' => ($active ?? '') === 'monitoring'])>لاگ و نظارت</a>
+    <a href="{{ route('jb.monitoring') }}" @class(['current' => ($active ?? '') === 'monitoring'])>لاگ و نظارت</a>
+    <a href="{{ route('jb.readiness') }}" @class(['current' => ($active ?? '') === 'readiness'])>وضعیت اتصال‌ها</a>
     <div class="spacer"></div>
     <span class="nav-product" aria-hidden="true">Workflow Automation</span>
 </nav>

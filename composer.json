@@ -53,5 +53,8 @@
     },
     "scripts": {
         "test": "vendor/bin/phpunit"
+    },
+    "suggest": {
+        "mongodb/mongodb": "Required to list and assign Onsite in MongoDB (also install the PHP mongodb extension); composer require mongodb/mongodb:^2.5"
     }
 }

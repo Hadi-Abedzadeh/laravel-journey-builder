@@ -298,6 +298,26 @@ final class Engine
                     }
                     $next='success';
                     break;
+                case 'onsite':
+                    try {
+                        app(OnsiteMongoService::class)->assign((string)$run->user_id, (string)($cfg['onsite_name'] ?? ''));
+                        $next = 'success'; // Means assignment was written; NOT that user viewed the Onsite.
+                    } catch (\Throwable $e) {
+                        // Driver errors may contain MongoDB URIs with credentials; never persist them.
+                        $safeError = preg_replace('~mongodb(?:\+srv)?://\S+~i', '[MongoDB URI redacted]', $e->getMessage());
+                        $safeError = preg_replace('~(?i)(password|passwd|pwd|token|secret)\s*[:=]\s*[^\s,;]+~', '$1=[redacted]', $safeError);
+                        if (($cfg['failure_policy'] ?? 'hold') === 'branch') {
+                            report(new \RuntimeException('Onsite assignment failed: '.$safeError));
+                            $next = 'failure';
+                        } else {
+                            $this->write($run, [
+                                'state'=>'failed','next_run_at'=>null,
+                                'last_error'=>mb_substr('Onsite assignment failed: '.$safeError, 0, 1800),
+                            ]);
+                            return;
+                        }
+                    }
+                    break;
                 case 'api':
                     $result=$this->external($run,$flow,$cfg,'api');
                     if ($result==='unknown') {
