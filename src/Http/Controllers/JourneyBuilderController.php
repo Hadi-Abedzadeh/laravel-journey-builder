@@ -68,7 +68,27 @@ class JourneyBuilderController extends \Illuminate\Routing\Controller
             $onsitesError='فهرست آنسایت در دسترس نیست؛ وضعیت اتصال MongoDB را در Readiness بررسی کنید.';
         }
         $canEdit = $this->isEditableFlow($this->db(), $flow);
-        return response()->view('journey-builder::dashboard',compact('flow','secretNodeIds','smsProviders','emailProviders','pushProviders','onsites','onsitesError','canEdit'))->header('Cache-Control','no-store, private');
+        // Build the UI payload in PHP, not in an inline @php(...) Blade directive.
+        // This keeps the template's control-flow syntax uncomplicated and
+        // prevents parsing issues from nested route(...) expressions.
+        $ui = [
+            'id' => $flow->id,
+            'readonly' => !$canEdit,
+            'graph' => json_decode($flow->graph_json, true),
+            'saveUrl' => route('jb.save', $flow->id),
+            'secretNodeIds' => $secretNodeIds,
+            'tokenUrlPattern' => route('jb.token', ['id' => $flow->id, 'nodeId' => '__NODE__']),
+            'smsProviders' => $smsProviders,
+            'emailProviders' => $emailProviders,
+            'pushProviders' => $pushProviders,
+            'onsites' => $onsites,
+            'onsitesError' => $onsitesError,
+            'smsProvidersUrl' => route('jb.sms.providers'),
+            'emailProvidersUrl' => route('jb.channels.index', 'email'),
+            'pushProvidersUrl' => route('jb.channels.index', 'webpush'),
+        ];
+        return response()->view('journey-builder::dashboard', compact('flow','secretNodeIds','smsProviders','emailProviders','pushProviders','onsites','onsitesError','canEdit','ui'))
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function show(Request $request, int $id)

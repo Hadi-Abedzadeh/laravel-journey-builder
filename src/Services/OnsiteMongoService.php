@@ -11,8 +11,8 @@ use RuntimeException;
  *  - onsite collection: onsites, {_id:ObjectId, onsite_name:string}
  *  - user collection: users, {_id:ObjectId, userId:string, onsite_journey:{"<onsiteId>":bool}}
  *
- * We deliberately never create user documents. Mapping member_data.userId to the
- * existing Mongo users.userId MUST be confirmed by the host application.
+ * We deliberately never create user documents. Exact string equality between
+ * member_data.userId and MongoDB users.userId is required.
  */
 final class OnsiteMongoService
 {
@@ -96,23 +96,24 @@ final class OnsiteMongoService
         return strtolower($ids[0]);
     }
 
+    /**
+     * SQL member_data.userId is the exact string in MongoDB users.userId.
+     * MongoDB users._id remains an unrelated ObjectId and must never be used
+     * to infer the user identity, even when userId looks like 24 hex digits.
+     */
     private function userIdFromSql(string $userId): ObjectId
     {
         if ($userId === '' || strlen($userId) > 100) {
             throw new RuntimeException('Invalid Journey userId.');
         }
-        // An actual Mongo _id can be passed directly as its 24-digit hexadecimal string.
-        // Most SQL Server member_data.userId values are NOT ObjectIds; they need a
-        // verified matching users.userId property. Do not guess or upsert a user.
-        $filter = self::isValidOnsiteId($userId)
-            ? ['_id' => new ObjectId($userId)]
-            : [self::EXTERNAL_USER_ID => $userId];
+
         $cursor = $this->database()->selectCollection(self::USERS)->find(
-            $filter, ['projection' => ['_id' => 1], 'limit' => 2]
+            [self::EXTERNAL_USER_ID => $userId],
+            ['projection' => ['_id' => 1], 'limit' => 2]
         );
         $users = iterator_to_array($cursor, false);
         if (count($users) !== 1 || !(($users[0]['_id'] ?? null) instanceof ObjectId)) {
-            throw new RuntimeException('Cannot uniquely map SQL userId to existing MongoDB users document. Confirm users.userId mapping.');
+            throw new RuntimeException('MongoDB users.userId was not found uniquely; Onsite was not assigned.');
         }
         return $users[0]['_id'];
     }
