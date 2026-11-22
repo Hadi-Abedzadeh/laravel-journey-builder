@@ -7,7 +7,7 @@ use RuntimeException;
 
 /**
  * Fixed MongoDB schema:
- *  - database: onsite_journey (connection configuration)
+ *  - database: marketingplus (fixed; not configured via .env)
  *  - onsite collection: onsites, {_id:ObjectId, onsite_name:string}
  *  - user collection: users, {_id:ObjectId, userId:string, onsite_journey:{"<onsiteId>":bool}}
  *
@@ -16,7 +16,7 @@ use RuntimeException;
  */
 final class OnsiteMongoService
 {
-    private const DATABASE = 'onsite_journey';
+    private const DATABASE = 'marketingplus';
     private const ONSITES = 'onsites';
     private const USERS = 'users';
     private const NAME = 'onsite_name';

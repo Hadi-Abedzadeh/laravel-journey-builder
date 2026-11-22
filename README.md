@@ -1,3 +1,5 @@
+> MongoDB database is fixed to `marketingplus` as of beta.17; see [README_BETA17_FA.md](README_BETA17_FA.md). Only the MongoDB connection URI comes from `.env`.
+
 > New: see [README_BETA15_FA.md](README_BETA15_FA.md) for fixed MongoDB collections and Onsite view waiting.
 
 <!-- Monitoring update v0.3.4-beta.4 -->
